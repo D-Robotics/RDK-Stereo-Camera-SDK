@@ -1,0 +1,60 @@
+"""Build metadata for the dstereo_cam Python package.
+
+The package and libdstereocam share the repository-level VERSION file because their
+ctypes structures must stay in lockstep.  This stays a setup.py rather than a
+PEP 621 ``[project]`` table: the supported RDK image ships setuptools 59, which
+predates complete PEP 621 support.
+"""
+
+from pathlib import Path
+
+from setuptools import setup
+
+
+HERE = Path(__file__).resolve().parent
+VERSION_FILE = HERE.parent / "VERSION"
+README_FILE = HERE / "README.md"
+
+DESCRIPTION = "Python interface for the RDK Stereo Camera and IMU"
+
+if not VERSION_FILE.is_file():
+    raise RuntimeError(
+        "%s is missing; build this package from the repository checkout, "
+        "which owns the version" % VERSION_FILE
+    )
+
+# README.md is the package documentation and is read whenever it is there; the
+# wheel keeps a usable long description without it, so writing that file and
+# building this package do not have to happen in any particular order.
+LONG_DESCRIPTION = (
+    README_FILE.read_text(encoding="utf-8") if README_FILE.is_file() else DESCRIPTION
+)
+
+setup(
+    name="dstereo-cam",
+    version=VERSION_FILE.read_text(encoding="utf-8").strip(),
+    description=DESCRIPTION,
+    long_description=LONG_DESCRIPTION,
+    long_description_content_type="text/markdown",
+    author="D-Robotics",
+    license="MIT",
+    url="https://github.com/D-Robotics/RDK-Stereo-Camera-SDK",
+    project_urls={
+        "Source": "https://github.com/D-Robotics/RDK-Stereo-Camera-SDK",
+        "Issues": "https://github.com/D-Robotics/RDK-Stereo-Camera-SDK/issues",
+    },
+    packages=["dstereo_cam"],
+    package_data={"dstereo_cam": ["__init__.pyi", "py.typed"]},
+    python_requires=">=3.10",
+    install_requires=["numpy>=1.20"],
+    # The hardware test prints frames and writes PNGs, so it needs OpenCV.
+    extras_require={"test": ["opencv-python>=4.5"]},
+    classifiers=[
+        "Development Status :: 4 - Beta",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: POSIX :: Linux",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.10",
+        "Topic :: Scientific/Engineering",
+    ],
+)

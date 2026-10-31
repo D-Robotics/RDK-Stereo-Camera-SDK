@@ -1,0 +1,12 @@
+# 构建与运行产物
+core/build/
+core/out/
+python/build/
+python/dist/
+python/*.egg-info/
+python/dsc_images/
+__pycache__/
+*.pyc
+ros2/build/
+ros2/install/
+ros2/log/
