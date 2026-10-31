@@ -262,7 +262,7 @@ dsc_err_t dsc_init(dsc_device_t *dev, const dsc_config_t *cfg);
 **示例**
 
 ```c
-dsc_config_t cfg = DSC_CONFIG("GS130WI", DSC_CAMERA_MODE_RECT, 544, 640, 30, 200);
+dsc_config_t cfg = DSC_CONFIG("GS130WI", DSC_CAMERA_MODE_RECT, 544, 448, 30, 200);
 
 dsc_device_t *dev = dsc_create();
 if (dsc_init(dev, &cfg) != DSC_OK) {
@@ -301,7 +301,7 @@ dsc_destroy(dev);
 需要定制配置时，建议先用预配置宏生成一份可用的初始值，再按字段修改：
 
 ```c
-dsc_config_t cfg = DSC_CONFIG("GS130WI", DSC_CAMERA_MODE_RECT, 544, 640, 30, 200);
+dsc_config_t cfg = DSC_CONFIG("GS130WI", DSC_CAMERA_MODE_RECT, 544, 448, 30, 200);
 
 cfg.camera_config.fps = 25;   /* 相机帧率 */
 cfg.camera_fifo.depth = 8;    /* 相机帧 FIFO 深度 */

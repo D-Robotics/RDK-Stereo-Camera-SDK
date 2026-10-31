@@ -262,7 +262,7 @@ Return values:
 **Example**
 
 ```c
-dsc_config_t cfg = DSC_CONFIG("GS130WI", DSC_CAMERA_MODE_RECT, 544, 640, 30, 200);
+dsc_config_t cfg = DSC_CONFIG("GS130WI", DSC_CAMERA_MODE_RECT, 544, 448, 30, 200);
 
 dsc_device_t *dev = dsc_create();
 if (dsc_init(dev, &cfg) != DSC_OK) {
@@ -301,7 +301,7 @@ There are many configuration items, and filling them in one by one is tedious an
 To customize, start from a preset macro to get a working baseline and then change individual fields:
 
 ```c
-dsc_config_t cfg = DSC_CONFIG("GS130WI", DSC_CAMERA_MODE_RECT, 544, 640, 30, 200);
+dsc_config_t cfg = DSC_CONFIG("GS130WI", DSC_CAMERA_MODE_RECT, 544, 448, 30, 200);
 
 cfg.camera_config.fps = 25;   /* camera frame rate */
 cfg.camera_fifo.depth = 8;    /* camera frame FIFO depth */
