@@ -1,0 +1,70 @@
+/**
+ * @file imu.cpp
+ * @brief IMU model registry table and probe loop.
+ *
+ * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
+ * Copyright (c) 2026 D-Robotics.
+ * SPDX-License-Identifier: MIT
+ * See the LICENSE file in the project root for the full license text.
+ */
+#include "devices/imu/imu.hpp"
+
+#include <vector>
+
+namespace dsc {
+namespace imu {
+
+namespace {
+
+// Auto-populated model registry: each model file self-registers via
+// DSC_IMU_REGISTER_MODEL at static-init time.
+std::vector<const ModelDesc *> &registry()
+{
+    static std::vector<const ModelDesc *> r;   // function-local static: safe init order
+    return r;
+}
+
+} // namespace
+
+bool register_model(const ModelDesc *desc)
+{
+    registry().push_back(desc);
+    return true;
+}
+
+Imu::Imu(uint8_t bus, uint8_t addr)
+    : bus_(bus, addr)
+{
+    if(!bus_)return;
+
+    for(const ModelDesc *m : registry()){
+        uint8_t val = 0;
+        if(bus_.read(m->who_am_i_addr, &val) != Status::Ok)continue;
+        if(val != m->who_am_i_val)continue;
+
+        desc_ = m;
+        return;
+    }
+}
+
+Imu::~Imu()
+{
+    if(desc_ && bus_)desc_->deinit(bus_);
+}
+
+Status Imu::init(const ImuConfig &cfg){return desc_->init(bus_, cfg);}
+
+Status Imu::start(){return desc_->start(bus_);}
+
+void Imu::stop(){desc_->stop(bus_);}
+
+Status Imu::read(ImuHwFifo16Packet *out, std::size_t cap, std::size_t *n_out){return desc_->read(bus_, out, cap, n_out);}
+
+bool Imu::full(){return desc_ && desc_->full(bus_);}
+
+const char *Imu::name() const{return desc_->name;}
+
+const char *Imu::info() const{return desc_->info;}
+
+} // namespace imu
+} // namespace dsc

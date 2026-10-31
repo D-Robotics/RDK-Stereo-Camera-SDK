@@ -1,0 +1,391 @@
+# RDK Stereo Camera SDK - core library, samples and tools
+#
+#   make                      build everything for the default platform (RDKX5),
+#                             including the .deb package
+#   make <platform>           build everything for a platform
+#                             (a directory name under src/devices/pipeline/)
+#   make lib                  build the library only
+#   make samples              build the sample programs only
+#   make tools                build the internal diagnostic tools only
+#   make deb                  pack the .deb (also part of a plain 'make')
+#   make clean                remove build/ and out/
+#
+# 'make -j<N>' is safe; the parallel build speedup scales with the core count.
+#
+# Compiling first prints what is being built and asks for confirmation; the question
+# is skipped when stdin is not a terminal, and DSC_NO_CONFIRM=1 skips it explicitly.
+#
+# Layout: objects and their .d files in build/<platform>/,
+#         library and binaries in out/<platform>/,
+#         the .deb package in out/ (next to the platform directories, not inside one).
+# A header change rebuilds exactly the objects that include it: the compiler
+# writes the dependency lists with -MMD and this Makefile includes them below.
+#
+# A platform name is only honoured as the first goal on the command line, so
+# 'make RDKX5 samples' builds for RDKX5 while 'make samples RDKX5' builds the
+# default platform, RDKX5.
+
+# ---- Dependencies ----
+
+# OpenCV static linking (self-contained; no runtime .so dependency)
+OPENCV_LIBS := -Wl,--start-group \
+    /usr/lib/aarch64-linux-gnu/libopencv_calib3d.a \
+    /usr/lib/aarch64-linux-gnu/libopencv_features2d.a \
+    /usr/lib/aarch64-linux-gnu/libopencv_flann.a \
+    /usr/lib/aarch64-linux-gnu/libopencv_core.a \
+    /usr/lib/aarch64-linux-gnu/libopencv_imgproc.a \
+    -Wl,--end-group
+
+# Horizon runtime libraries (dynamic linking)
+HBN_LIB_DIR := /usr/hobot/lib
+HBN_LIBS    := -lvpf -lhbmem -lcam
+
+# ---- Platform ----
+# Available platforms = subdirectory names under src/devices/pipeline/.
+# 'make <platform>' builds for it; a bare 'make' defaults to RDKX5.
+# Only the first command-line goal is inspected (see GOAL below), so the platform
+# name has to come first: 'make RDKX5 samples' selects RDKX5, 'make samples RDKX5'
+# builds the default platform instead.
+PLATFORMS := $(patsubst src/devices/pipeline/%/,%,$(wildcard src/devices/pipeline/*/))
+
+# only the first goal on the command line can name a platform
+GOAL := $(firstword $(MAKECMDGOALS))
+ifneq ($(filter $(GOAL),$(PLATFORMS)),)
+PLATFORM := $(GOAL)
+endif
+PLATFORM ?= RDKX5
+
+# the platform backend .cpp is #included by path (not compiled standalone)
+PLATFORM_IMPL = -DDSC_PLATFORM_IMPL='"devices/pipeline/$(PLATFORM)/$(PLATFORM).cpp"'
+# platform name string, embedded for dsc_platform()
+PLATFORM_STR  = -DDSC_PLATFORM='"$(PLATFORM)"'
+
+# Platform headers that are not on the compiler's default search path. RDKX5
+# installs its Horizon headers into /usr/include, which is searched anyway;
+# RDKS100 and RDKS600 keep them under /usr/hobot/include, which is not, so they
+# need the -I. Their hbn_isp_cfg.h includes "cJSON.h" bare while the package
+# installs it under /usr/include/cjson, so that directory is needed too. Kept per
+# platform so adding one cannot shadow another's headers.
+PLATFORM_INCLUDES := $(if $(filter RDKS100 RDKS600,$(PLATFORM)), -I/usr/hobot/include -I/usr/include/cjson)
+
+# ---- Version ----
+
+VERSION_FILE := ../VERSION
+VERSION      := $(shell cat $(VERSION_FILE) 2>/dev/null)
+ifeq ($(strip $(VERSION)),)
+$(error $(VERSION_FILE) is missing or empty)
+endif
+VERSION_MAJOR := $(shell echo $(VERSION) | cut -d. -f1)
+VERSION_DEF   = -DDSC_VERSION='"$(VERSION)"'
+
+# ---- Toolchain ----
+
+CC  = gcc
+CXX = g++
+
+# ---- Flags ----
+
+COMMON_FLAGS = -Wall -Wextra -O2 -g -fPIC -MMD -MP
+CFLAGS   = $(COMMON_FLAGS) -std=gnu11
+CXXFLAGS = $(COMMON_FLAGS) -std=gnu++17 $(PLATFORM_IMPL) $(VERSION_DEF) $(PLATFORM_STR)
+INCLUDES = -Iinclude -Isrc -I/usr/include/opencv4$(PLATFORM_INCLUDES)
+# Linking against the static OpenCV archives dominates every link; ld.gold links
+# these archives noticeably faster than the default ld.bfd and produces the same
+# library. Used when it is installed, otherwise the default linker is kept.
+LDFLAGS_GOLD = $(shell command -v ld.gold >/dev/null 2>&1 && echo -fuse-ld=gold)
+# glibc stays dynamic: libc.so.6 / libm.so.6 / ld.so cannot be linked into a shared
+# library, and libpthread/librt/libdl are part of libc here (no NEEDED of their own).
+# zlib is linked statically, so libz.so.1 is not a runtime dependency either.
+# The static OpenCV core calls into TBB and the image ships no libtbb.a, so a
+# libtbb shared object is the only remaining non-glibc, non-Horizon runtime
+# dependency. Its SONAME depends on the TBB generation the image carries
+# (libtbb.so.2 on the RDK X5 and S100 images, libtbb.so.12 on the S600 one), so
+# resolve it from what is installed instead of naming one version.
+GLIBC_LIBS  := -lm -lpthread -lrt -ldl
+ZLIB_STATIC := /usr/lib/aarch64-linux-gnu/libz.a
+TBB_SONAMES := libtbb.so.2 libtbb.so.12 libtbb.so
+TBB_DIR     := /usr/lib/aarch64-linux-gnu
+TBB_FILES   := $(foreach so,$(TBB_SONAMES),$(wildcard $(TBB_DIR)/$(so)))
+# Prefer a libtbb that some package owns: a stray copy (left behind by another
+# SDK, or a compatibility symlink) must not decide the dependency name.
+TBB_LIB     := $(firstword $(foreach f,$(TBB_FILES),$(if $(shell dpkg -S $(f) 2>/dev/null),$(f))))
+ifeq ($(strip $(TBB_LIB)),)
+TBB_LIB     := $(firstword $(TBB_FILES))
+endif
+ifeq ($(strip $(TBB_LIB)),)
+$(error no libtbb shared object found under $(TBB_DIR))
+endif
+# Name the dependency after whichever package provides the library actually
+# linked, rather than guessing from the SONAME: the generation names differ
+# across Ubuntu releases (libtbb2 on 22.04 / jammy, libtbb12 on 24.04 / noble)
+# and an image can carry both SONAMEs at once. Fall back to the SONAME only
+# when nothing owns the file.
+TBB_OWNER := $(firstword $(shell dpkg -S $(TBB_LIB) 2>/dev/null | cut -d: -f1))
+TBB_SOVER := $(patsubst libtbb.so.%,%,$(notdir $(TBB_LIB)))
+TBB_PKG   := $(if $(strip $(TBB_OWNER)),$(TBB_OWNER),$(if $(filter $(TBB_SOVER),2 12),libtbb$(TBB_SOVER),libtbb2 | libtbb12))
+# The static OpenCV archives also reference OpenGL and LAPACK/BLAS entry points, from
+# their calib3d module. A shared object is allowed to carry undefined symbols, but the
+# Python bindings open libdstereocam with eager relocation, so an unresolved one fails the
+# dlopen even though nothing here calls those functions -- the C samples only survive
+# because their own symbol resolution stays lazy. Name the providers, resolving them
+# from what is installed as the TBB SONAME is. liblapack pulls in libblas and
+# libgfortran by itself, so those are not named.
+OPENCV_SYS_SONAMES := libGL.so.1 liblapack.so.3
+OPENCV_SYS_LIBS    := $(foreach so,$(OPENCV_SYS_SONAMES),$(if $(wildcard /usr/lib/aarch64-linux-gnu/$(so)),-l:$(so)))
+# -static-libstdc++/-static-libgcc embed the C++ runtime, dropping libstdc++.so.6 and
+# libgcc_s.so.1 from NEEDED; --exclude-libs,ALL keeps the symbols taken from those
+# static archives out of the dynamic symbol table, so only the C API and the
+# library's own symbols are exported.
+LDFLAGS_SELF := -static-libstdc++ -static-libgcc -Wl,--exclude-libs,ALL
+LDFLAGS  = -L$(HBN_LIB_DIR) $(LDFLAGS_SELF)
+LIBS     = $(HBN_LIBS) $(GLIBC_LIBS) $(OPENCV_LIBS) $(ZLIB_STATIC) $(TBB_LIB) $(OPENCV_SYS_LIBS)
+
+# ---- Sources ----
+
+# source path -> object path under build/$(PLATFORM)/  (.c and .cpp both -> build/<platform>/....o)
+to_obj = $(patsubst %.cpp,build/$(PLATFORM)/%.o,$(patsubst %.c,build/$(PLATFORM)/%.o,$1))
+
+# auto-discovered.
+# NOTE: a platform .cpp under pipeline/<platform>/ (e.g. RDKX5.cpp) is #included by
+#       pipeline.cpp (single-TU dispatch), so it must NOT be compiled as a separate object.
+#       The .c node files in those dirs ARE compiled normally.
+C_SRCS   := $(wildcard src/devices/pipeline/$(PLATFORM)/*.c)
+CPP_SRCS := $(shell find src -type f -name '*.cpp' ! -path '*/devices/pipeline/*/*.cpp' ! -path '*/tools/*')
+OBJS     := $(call to_obj,$(C_SRCS) $(CPP_SRCS))
+
+# ---- Outputs ----
+
+OUT_ROOT     = out
+OUT_DIR      = $(OUT_ROOT)/$(PLATFORM)
+LIB_STATIC   = $(OUT_DIR)/libdstereocam.a
+LIB_FULL     = $(OUT_DIR)/libdstereocam.so.$(VERSION)
+LIB_SO_MAJOR = $(OUT_DIR)/libdstereocam.so.$(VERSION_MAJOR)
+LIB_SHARED   = $(OUT_DIR)/libdstereocam.so
+
+# ---- Confirmation ----
+# Compiling asks once for confirmation, after saying what is being built.  The
+# question is skipped when stdin is not a terminal, so scripted and CI builds never
+# block, and DSC_NO_CONFIRM=1 skips it in an interactive shell too.  'make -n' and
+# 'make -q' never run recipes, so they never run the question either.
+#
+# The object rules carry it as an order-only prerequisite as well as the named
+# targets below: under 'make -j<N>' make starts every prerequisite of a target at
+# once, so without that the objects would compile while the question is still on
+# screen.
+# Order-only ('|') and not a plain prerequisite, so that a phony target -- which is
+# always considered updated -- does not force a rebuild of every object on every run.
+
+CONFIRM := $(if $(filter n q,$(MAKEFLAGS)),,confirm)
+
+.PHONY: confirm
+confirm:
+	@if [ ! -t 0 ] || [ -n "$$DSC_NO_CONFIRM" ]; then exit 0; fi; \
+	if [ -t 2 ] && [ -z "$$NO_COLOR" ]; then \
+	    B="$$(printf '\033[1m')"; D="$$(printf '\033[2m')"; \
+	    C="$$(printf '\033[36m')"; Y="$$(printf '\033[33m')"; \
+	    R="$$(printf '\033[0m')"; \
+	else \
+	    B=""; D=""; C=""; Y=""; R=""; \
+	fi; \
+	L="$$(printf '─%.0s' $$(seq 1 62))"; \
+	{ \
+	    printf '\n  %s%s%s\n' "$$D" "$$L" "$$R"; \
+	    printf '    %sRDK Stereo Camera SDK Core%s\n' "$$B" "$$R"; \
+	    printf '      %splatform%s   %s%s%s\n' "$$D" "$$R" "$$C" "$(PLATFORM)" "$$R"; \
+	    printf '      %sversion%s    %s%s%s\n' "$$D" "$$R" "$$C" "$(VERSION)" "$$R"; \
+	    printf '  %s%s%s\n\n' "$$D" "$$L" "$$R"; \
+	    printf '    %sCheck that the build platform matches the platform you will run on.%s\n\n' \
+	        "$$Y" "$$R"; \
+	    printf '    %sBuild?%s [Y/n] ' "$$B" "$$R"; \
+	} >&2; \
+	read -r a || exit 1; \
+	printf '\n' >&2; \
+	case "$$a" in \
+	    ""|[Yy]|[Yy][Ee][Ss]) ;; \
+	    *) printf '  aborted, nothing was built.\n\n' >&2; exit 1 ;; \
+	esac
+
+# ---- Targets ----
+
+# make takes the first target in the file as its default goal, and the confirmation
+# target above is defined before this one, so name the intended default explicitly.
+.DEFAULT_GOAL := all
+
+# 'deb' is named rather than $(DEB_FILE) so this line does not depend on variables
+# that are defined further down; the package rule itself lists its prerequisites.
+all: $(CONFIRM) lib samples tools deb
+
+lib: $(CONFIRM) $(LIB_STATIC) $(LIB_FULL)
+
+# each platform directory name is itself a build target: 'make RDKX5' etc.
+.PHONY: $(PLATFORMS)
+$(PLATFORMS): all
+
+# ---- Samples ----
+# Each samples/*.c becomes a standalone executable; samples/dsc dispatches to them.
+
+SAMPLE_SRCS := $(wildcard samples/*.c)
+SAMPLE_BINS := $(patsubst samples/%.c,$(OUT_DIR)/%,$(SAMPLE_SRCS))
+SAMPLE_OBJS := $(patsubst samples/%.c,build/$(PLATFORM)/%.o,$(SAMPLE_SRCS))
+
+samples: $(CONFIRM) $(SAMPLE_BINS) $(OUT_DIR)/dsc
+
+# Static pattern rule: these objects are explicit targets, not intermediates made by
+# a pattern rule. make would otherwise treat an object that is only ever a prerequisite
+# as an intermediate file and drop it, forcing a rebuild on every run.
+$(SAMPLE_OBJS): build/$(PLATFORM)/%.o: samples/%.c | $(CONFIRM)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+$(OUT_DIR)/dsc: samples/dsc
+	@mkdir -p $(OUT_DIR)
+	cp $< $@
+	chmod +x $@
+
+# ---- Tools ----
+# Internal diagnostic tools (private headers), dispatched by the dsc script.
+
+TOOL_SRCS := $(wildcard src/tools/*.cpp)
+TOOL_BINS := $(patsubst src/tools/%.cpp,$(OUT_DIR)/%,$(TOOL_SRCS))
+TOOL_OBJS := $(patsubst src/tools/%.cpp,build/$(PLATFORM)/%.o,$(TOOL_SRCS))
+
+tools: $(CONFIRM) $(TOOL_BINS)
+
+$(TOOL_OBJS): build/$(PLATFORM)/%.o: src/tools/%.cpp | $(CONFIRM)
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+
+# ---- Binaries ----
+# Compiling is separate from linking so each .o is a real target: the .d files below
+# then make a header change rebuild the objects that include it.
+# The library is an order-only prerequisite ('|'): linking needs it to exist, but a
+# rebuilt library does not change these binaries (they link it dynamically), so they
+# are not relinked on every library change. VERSION is a normal prerequisite because
+# a major version bump changes the SONAME they record.
+
+$(OUT_DIR)/%: build/$(PLATFORM)/%.o $(VERSION_FILE) | $(LIB_FULL)
+	@mkdir -p $(OUT_DIR)
+	$(CXX) $(LDFLAGS_GOLD) $< -o $@ -L$(OUT_DIR) -ldstereocam -Wl,-rpath,'$$ORIGIN'
+
+# ---- Library ----
+
+$(LIB_STATIC): $(OBJS)
+	@mkdir -p $(OUT_DIR)
+	ar rcs $@ $^
+
+$(LIB_FULL): $(OBJS)
+	@mkdir -p $(OUT_DIR)
+	$(CXX) $(LDFLAGS_GOLD) -shared $^ -o $@ -Wl,-soname,$(notdir $(LIB_SO_MAJOR)) \
+	    $(LDFLAGS) $(LIBS) -Wl,-rpath,$(HBN_LIB_DIR)
+	@ln -sf $(notdir $(LIB_FULL)) $(LIB_SO_MAJOR)
+	@ln -sf $(notdir $(LIB_SO_MAJOR)) $(LIB_SHARED)
+
+# ---- Rules ----
+
+build/$(PLATFORM)/%.o: %.c | $(CONFIRM)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+build/$(PLATFORM)/%.o: %.cpp | $(CONFIRM)
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+
+# ---- Dependencies ----
+# -MMD -MP above makes the compiler write one .d per object, listing every header
+# that object includes. Including them here gives make the real dependency graph,
+# so editing a header rebuilds exactly the objects that include it.
+
+DEPS := $(OBJS:.o=.d) $(SAMPLE_OBJS:.o=.d) $(TOOL_OBJS:.o=.d)
+
+-include $(DEPS)
+
+# ---- Clean ----
+
+clean:
+	rm -rf build out
+
+.PHONY: all lib samples tools deb clean
+
+# ---- Package ----
+# 'make deb' builds everything and packs it into a single .deb: the shared and static
+# library, both headers, and the dsc command together with the helper binaries it
+# calls from its own directory. The package is assembled with dpkg-deb directly, so
+# the build needs no debhelper/fakeroot and no network.
+# The package is named dstereo-cam, and the platform is compiled into the library, so
+# it rides in the version and not in the package name: DEB_VERSION is
+# <version>+<platform>, where the platform is the .deb revision.
+#   out/dstereo-cam_<version>+<platform>_<arch>.deb
+# Every build of the same version and platform therefore repacks the same file name;
+# there is no counter that keeps older packages apart.
+
+MULTIARCH     := $(shell dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null || gcc -dumpmachine)
+# dpkg's word for the architecture. uname says 'aarch64' for the same machine, which
+# is not a valid .deb architecture, so map it for hosts without dpkg.
+DEB_ARCH      := $(shell dpkg --print-architecture 2>/dev/null || uname -m | sed 's/aarch64/arm64/')
+DEB_NAME      := dstereo-cam
+DEB_VERSION   := $(VERSION)+$(PLATFORM)
+DEB_FILE      := $(OUT_ROOT)/$(DEB_NAME)_$(DEB_VERSION)_$(DEB_ARCH).deb
+DEB_ROOT      := build/deb/$(DEB_NAME)
+DEB_MAINTAINER ?= hachi_leaf <xiaoye.zhang@d-robotics.cc>
+# xz -0 instead of the dpkg default (zstd -19): compressing the payload is much
+# cheaper at the lowest xz level, at the cost of a larger package. Since a plain
+# 'make' packs as well, that difference would otherwise show up on every build.
+
+deb: $(CONFIRM) $(DEB_FILE)
+
+$(DEB_FILE): $(LIB_STATIC) $(LIB_FULL) $(SAMPLE_BINS) $(TOOL_BINS) $(OUT_DIR)/dsc \
+              $(VERSION_FILE)
+	@mkdir -p $(OUT_ROOT)
+	rm -rf $(DEB_ROOT)
+	mkdir -p $(DEB_ROOT)/DEBIAN $(DEB_ROOT)/usr/bin $(DEB_ROOT)/usr/include \
+	         $(DEB_ROOT)/usr/lib/$(MULTIARCH) $(DEB_ROOT)/usr/share/doc/$(DEB_NAME)
+	install -m644 include/dstereo_cam.h include/dstereo_cam_define.h $(DEB_ROOT)/usr/include
+	install -m644 $(LIB_STATIC) $(DEB_ROOT)/usr/lib/$(MULTIARCH)
+	install -m755 $(LIB_FULL) $(DEB_ROOT)/usr/lib/$(MULTIARCH)
+	ln -sf $(notdir $(LIB_FULL)) $(DEB_ROOT)/usr/lib/$(MULTIARCH)/libdstereocam.so.$(VERSION_MAJOR)
+	ln -sf libdstereocam.so.$(VERSION_MAJOR) $(DEB_ROOT)/usr/lib/$(MULTIARCH)/libdstereocam.so
+	install -m755 $(SAMPLE_BINS) $(TOOL_BINS) $(OUT_DIR)/dsc $(DEB_ROOT)/usr/bin
+	install -m644 ../LICENSE $(DEB_ROOT)/usr/share/doc/$(DEB_NAME)/copyright
+	{ \
+	    echo "Package: $(DEB_NAME)"; \
+	    echo "Version: $(DEB_VERSION)"; \
+	    echo "Architecture: $(DEB_ARCH)"; \
+	    echo "Maintainer: $(DEB_MAINTAINER)"; \
+	    echo "Section: misc"; \
+	    echo "Priority: optional"; \
+	    echo "Depends: libc6 (>= 2.34), $(TBB_PKG), hobot-multimedia"; \
+	    echo "Description: RDK Stereo Camera SDK for $(PLATFORM)"; \
+	    echo " Camera and IMU capture library with the dsc command line tool."; \
+	    echo " The $(PLATFORM) backend is compiled into the library."; \
+	} > $(DEB_ROOT)/DEBIAN/control
+	printf '#!/bin/sh\nset -e\nldconfig\n' > $(DEB_ROOT)/DEBIAN/postinst
+	cp $(DEB_ROOT)/DEBIAN/postinst $(DEB_ROOT)/DEBIAN/postrm
+	chmod 755 $(DEB_ROOT)/DEBIAN/postinst $(DEB_ROOT)/DEBIAN/postrm
+	dpkg-deb -Zxz -z0 --root-owner-group --build $(DEB_ROOT) $@
+
+# ---- Per-module targets ----
+# Compile a single module on demand; 'base' / 'devices' build their whole group.
+# Sources are auto-discovered, so adding a file needs no Makefile edit.
+
+# base module
+.PHONY: base fifo i2c rectify tracker
+
+base:    fifo i2c rectify tracker
+
+fifo:                          # header-only, nothing to compile
+	@echo "fifo: header-only, nothing to compile"
+
+i2c:     $(call to_obj,$(wildcard src/base/i2c/*.cpp))
+rectify: $(call to_obj,$(wildcard src/base/rectify/*.cpp))
+tracker: $(call to_obj,$(wildcard src/base/tracker/*.cpp))
+
+# devices module
+.PHONY: devices eeprom imu pipeline
+
+devices: eeprom imu pipeline
+
+eeprom:   $(call to_obj,$(wildcard src/devices/eeprom/*.cpp))
+imu:      $(call to_obj,$(wildcard src/devices/imu/*.cpp))
+# pipeline glue (pipeline.cpp) + the selected platform's .c node helpers;
+# the platform's .cpp backend is #included by pipeline.cpp, not compiled standalone
+pipeline: $(call to_obj,$(wildcard src/devices/pipeline/*.cpp) $(wildcard src/devices/pipeline/$(PLATFORM)/*.c))
