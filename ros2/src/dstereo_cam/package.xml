@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<!--
+  This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
+  Copyright (c) 2026 D-Robotics.
+  SPDX-License-Identifier: MIT
+  See the LICENSE file in the project root for the full license text.
+-->
+<package format="3">
+  <name>dstereo_cam</name>
+  <version>0.1.0</version>
+  <description>
+    ROS 2 driver for the RDK stereo camera and its optional IMU. It publishes
+    images, camera calibration, inertial samples, and static sensor transforms
+    through standard ROS 2 message and TF interfaces. The package links directly
+    to the RDK Stereo Camera SDK C library, which has to be installed separately.
+  </description>
+  <maintainer email="hachi-leaf@users.noreply.github.com">hachi-leaf</maintainer>
+  <license>MIT</license>
+  <url type="repository">https://github.com/D-Robotics/RDK-Stereo-Camera-SDK</url>
+
+  <!-- Build system. -->
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- Compile-time and runtime dependencies of the dstereo_cam_node executable. -->
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>builtin_interfaces</depend>
+  <depend>tf2_ros</depend>
+
+  <!-- Declare the package build type to the ament index. -->
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
