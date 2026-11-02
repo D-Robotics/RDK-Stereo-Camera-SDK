@@ -1,4 +1,4 @@
-# RDK 双目摄像头模组 SDK —— Python 接口
+# RDK 双目相机 SDK —— Python 接口
 
 **简体中文** | [English](README.md)
 

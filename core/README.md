@@ -1,4 +1,4 @@
-# RDK Stereo Camera Module SDK Core Interface Reference
+# RDK Stereo Camera SDK Core Interface Reference
 
 **English** | [简体中文](README.zh-CN.md)
 
@@ -6,7 +6,7 @@
 
 ### 1.1 Introduction
 
-`core` is the core of the RDK Stereo Camera Module SDK. It is written in C/C++, exposes the C API, and implements all of the SDK's functionality. Both the Python package and the ROS 2 wrapper depend on it.
+`core` is the core of the RDK Stereo Camera SDK. It is written in C/C++, exposes the C API, and implements all of the SDK's functionality. Both the Python package and the ROS 2 wrapper depend on it.
 
 ### 1.2 Supported Models and Platforms
 

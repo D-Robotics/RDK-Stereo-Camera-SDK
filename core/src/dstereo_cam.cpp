@@ -306,12 +306,20 @@ static void camera_thread_func(dsc_device_t *dev)
 
         st = dev->pipeline->get_frame(F, y[fi], uv[fi],
                                       width, height, stride, stride, &ts[fi], 100);
+        if(st == Status::HwError){          // hardware fault, e.g. a frame without LPWM trigger
+            dev->state.store(Status::HwError);
+            goto free_frame;
+        }
         if(st != Status::Ok)goto free_frame;
         // upload the master clock phase from the bound eye's new frame first
         dev->tracker->update_master_timestamp_ns(ts[fi]);
 
         st = dev->pipeline->get_frame(O, y[oi], uv[oi],
                                       width, height, stride, stride, &ts[oi], 100);
+        if(st == Status::HwError){          // hardware fault, e.g. a frame without LPWM trigger
+            dev->state.store(Status::HwError);
+            goto free_frame;
+        }
         if(st != Status::Ok)goto free_frame;
 
         // half-frame alignment: drop the eye with the smaller (older) timestamp and refetch until aligned
@@ -324,7 +332,11 @@ static void camera_thread_func(dsc_device_t *dev)
             const CamIndex lag_idx = (lag == R) ? CamIndex::Right : CamIndex::Left;
             st = dev->pipeline->get_frame(lag_idx, y[lag], uv[lag],
                                           width, height, stride, stride, &ts[lag], 100);
-            if(st != Status::Ok)goto free_frame;
+            if(st == Status::HwError){          // hardware fault, e.g. a frame without LPWM trigger
+            dev->state.store(Status::HwError);
+            goto free_frame;
+        }
+        if(st != Status::Ok)goto free_frame;
             if(lag == fi)   // refetched the bound eye; upload the phase again
                 dev->tracker->update_master_timestamp_ns(ts[fi]);
         }

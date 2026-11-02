@@ -44,17 +44,14 @@ constexpr uint32_t kPymHwId = 0;
 // left the nodes unbound.
 constexpr uint32_t kIspSlotBase = 4;
 
-/** Convert a driver frame timestamp to nanoseconds. trig_tv (the LPWM exposure trigger)
- *  is preferred; the driver's timestamps field and tv are fallbacks. */
+/** Convert the driver's LPWM trigger timestamp to nanoseconds.  Only trig_tv, the
+ *  LPWM rising edge (exposure trigger instant), is used: that is the instant the IMU
+ *  pairing needs.  There is deliberately no fallback to the driver's timestamps field
+ *  or to tv, so a frame without trigger information reports 0. */
 uint64_t frame_ts_ns(const hbn_frame_info_t &info)
 {
-    if(info.trig_tv.tv_sec != 0 || info.trig_tv.tv_usec != 0)
-        return static_cast<uint64_t>(info.trig_tv.tv_sec) * 1000000000ULL +
-               static_cast<uint64_t>(info.trig_tv.tv_usec) * 1000ULL;
-    if(info.timestamps != 0)
-        return info.timestamps;
-    return static_cast<uint64_t>(info.tv.tv_sec) * 1000000000ULL +
-           static_cast<uint64_t>(info.tv.tv_usec) * 1000ULL;
+    return static_cast<uint64_t>(info.trig_tv.tv_sec) * 1000000000ULL +
+           static_cast<uint64_t>(info.trig_tv.tv_usec) * 1000ULL;
 }
 
 
@@ -518,6 +515,15 @@ Status Pipeline::get_frame(CamIndex idx,
         return Status::ParamError;
     }
 
+    // A frame without LPWM trigger information has no exposure instant to pair with IMU
+    // samples, so it is dropped rather than delivered with a timestamp from another clock.
+    const uint64_t ts_ns = frame_ts_ns(grouped ? grp.info : img.info);
+    if(ts_ns == 0){
+        if(grouped)hbn_vnode_releaseframe_group(c.output_node, c.output_chn, &grp);
+        else       hbn_vnode_releaseframe(c.output_node, c.output_chn, &img);
+        return Status::HwError;
+    }
+
     // Copy row by row using each plane's stride. A captured RAW10 frame is a single
     // packed plane (the capture node reports plane_cnt 1 and leaves virt_addr[1] null),
     // so the second plane is only copied when the node actually produced one.
@@ -529,7 +535,7 @@ Status Pipeline::get_frame(CamIndex idx,
             memcpy(uv + (std::size_t)r * uv_stride,
                    buf.virt_addr[1] + (std::size_t)r * buf.stride, width);
 
-    *timestamp_ns = frame_ts_ns(grouped ? grp.info : img.info);
+    *timestamp_ns = ts_ns;
 
     if(grouped)hbn_vnode_releaseframe_group(c.output_node, c.output_chn, &grp);
     else       hbn_vnode_releaseframe(c.output_node, c.output_chn, &img);

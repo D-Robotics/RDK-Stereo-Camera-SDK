@@ -21,7 +21,7 @@
 #include <cstdlib>
 #include <vector>
 
-using namespace dstereo-cam;
+using namespace dsc;
 
 // SC132GS sensor chip identification: the register and value the pipeline probes with
 // (see Pipeline::Pipeline), read back as a 16-bit big-endian register value

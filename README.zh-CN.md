@@ -1,8 +1,8 @@
-# RDK 双目摄像头模组 SDK
+# RDK 双目相机 SDK
 
 **简体中文** | [English](README.md)
 
-RDK 双目摄像头模组 SDK 用于在 RDK 开发板上使用双目摄像头模组及其板载 IMU，由原生 C 库和建立在其上的 Python、ROS 2 封装组成。
+RDK 双目相机 SDK 用于在 RDK 开发板上使用双目相机及其板载 IMU，由原生 C 库和建立在其上的 Python、ROS 2 封装组成。
 
 > **开发者预览版（Alpha）。** 本版本用于评估，接口、配置预设与行为可能在不另行通知的情况下变更。欢迎通过 [D-Robotics 开发者社区](https://forum.d-robotics.cc/) 反馈问题或参与贡献。
 
@@ -20,7 +20,7 @@ RDK 双目摄像头模组 SDK 用于在 RDK 开发板上使用双目摄像头模
 
 ## 依赖
 
-- **硬件**：一块 RDK 开发板和一个双目摄像头模组，部分型号带 IMU。
+- **硬件**：一块 RDK 开发板和一个双目相机，部分型号带 IMU。
 - **core**：Horizon 多媒体库、OpenCV 4、TBB（均由 RDK OS 自带）。
 - **Python 封装**：Python 3.10 及以上与 `numpy`；构建 wheel 还需要 `setuptools` 与 `wheel`。
 - **ROS 2 封装**：ROS 2 Humble 或 Jazzy。网页预览与双目深度的 launch 文件还需要 TROS 的 `hobot_codec`、`websocket` 与 `hobot_stereonet`。

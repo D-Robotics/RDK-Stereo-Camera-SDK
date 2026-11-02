@@ -42,9 +42,9 @@ class ErrorCode(IntEnum):
 class CameraMode(IntEnum):
     """How frames travel through the ISP."""
 
-    RAW = _abi.dstereo_cam_mode_t.DSC_CAMERA_MODE_RAW
-    RESIZE = _abi.dstereo_cam_mode_t.DSC_CAMERA_MODE_RESIZE
-    RECT = _abi.dstereo_cam_mode_t.DSC_CAMERA_MODE_RECT
+    RAW = _abi.dsc_camera_mode_t.DSC_CAMERA_MODE_RAW
+    RESIZE = _abi.dsc_camera_mode_t.DSC_CAMERA_MODE_RESIZE
+    RECT = _abi.dsc_camera_mode_t.DSC_CAMERA_MODE_RECT
 
 
 class CameraIndex(IntEnum):

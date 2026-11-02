@@ -1,4 +1,4 @@
-# RDK Stereo Camera Module SDK — Python Interface
+# RDK Stereo Camera SDK — Python Interface
 
 **English** | [简体中文](README.zh-CN.md)
 

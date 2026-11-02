@@ -36,25 +36,20 @@ constexpr uint16_t kChipIdReg = 0x3107;
 constexpr uint16_t kChipId    = 0x0132;
 
 /**
- * @brief Convert a driver frame timestamp to nanoseconds.
+ * @brief Convert the driver's LPWM trigger timestamp to nanoseconds.
  *
- * Preference order: trig_tv (LPWM rising edge = exposure trigger time), then the
- * driver's timestamps field, then tv (the time the frame was ready). The exposure
- * time is what the IMU pairing needs, so the other two are only fallbacks for when
- * the trigger information is missing.
+ * Only trig_tv, the LPWM rising edge (exposure trigger instant), is used: that is the
+ * instant the IMU pairing needs. There is deliberately no fallback to the driver's
+ * timestamps field or to tv, so a frame without trigger information reports 0 rather
+ * than a value from a different clock.
  *
  * @param[in] info Frame information returned with the frame.
- * @return Timestamp in nanoseconds on the device clock.
+ * @return Timestamp in nanoseconds on the device clock, or 0 when trig_tv is unset.
  */
 uint64_t frame_ts_ns(const hbn_frame_info_t &info)
 {
-    if(info.trig_tv.tv_sec != 0 || info.trig_tv.tv_usec != 0)
-        return static_cast<uint64_t>(info.trig_tv.tv_sec) * 1000000000ULL +
-               static_cast<uint64_t>(info.trig_tv.tv_usec) * 1000ULL;
-    if(info.timestamps != 0)
-        return info.timestamps;
-    return static_cast<uint64_t>(info.tv.tv_sec) * 1000000000ULL +
-           static_cast<uint64_t>(info.tv.tv_usec) * 1000ULL;
+    return static_cast<uint64_t>(info.trig_tv.tv_sec) * 1000000000ULL +
+           static_cast<uint64_t>(info.trig_tv.tv_usec) * 1000ULL;
 }
 
 } // namespace
@@ -413,6 +408,14 @@ Status Pipeline::get_frame(CamIndex idx,
         return Status::ParamError;
     }
 
+    // A frame without LPWM trigger information has no exposure instant to pair with IMU
+    // samples, so it is dropped rather than delivered with a timestamp from another clock.
+    const uint64_t ts_ns = frame_ts_ns(img.info);
+    if(ts_ns == 0){
+        hbn_vnode_releaseframe(c.output_node, c.output_chn, &img);
+        return Status::HwError;
+    }
+
     // Copy row by row using each plane's stride
     for(uint32_t r = 0; r < height; ++r)
         memcpy(y + (std::size_t)r * y_stride,
@@ -421,7 +424,7 @@ Status Pipeline::get_frame(CamIndex idx,
         memcpy(uv + (std::size_t)r * uv_stride,
                img.buffer.virt_addr[1] + (std::size_t)r * img.buffer.stride, width);
 
-    *timestamp_ns = frame_ts_ns(img.info);
+    *timestamp_ns = ts_ns;
 
     hbn_vnode_releaseframe(c.output_node, c.output_chn, &img);
     return Status::Ok;

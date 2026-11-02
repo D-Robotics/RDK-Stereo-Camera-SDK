@@ -13,7 +13,7 @@
  *   <out_dir>             output directory, created when missing
  *   <stitch>              non-zero records one stitched left-right frame per
  *                         camera index, 0 records one file per eye
- *   <device>              device model: GS130WI | GS130W
+ *   <device>              device model: GS130WI | GS130WI_20260922 | GS130W
  *   <mode>                pipeline mode: raw | resize | rect (anything else is raw)
  *   <width>, <height>     output size in pixels
  *   <fps>                 camera frame rate
@@ -67,7 +67,7 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "dstereo_cam.h"
-#include "dsc_define.h"
+#include "dstereo_cam_define.h"
 
 #include <signal.h>
 #include <stdbool.h>

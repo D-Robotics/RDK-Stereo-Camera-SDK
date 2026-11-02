@@ -2,7 +2,7 @@
 
 Usage on the board, from the ``python/`` directory:
 
-    python3 test/test_dsc.py GS130WI rect 544 448 30 200
+    python3 test/test_dstereo_cam.py GS130WI rect 544 448 30 200
 
 It runs straight from the checkout, installed or not.  It walks the public API
 once and prints what it finds: configuration, device identity, calibration,
@@ -50,7 +50,7 @@ def parse_args(argv):
     parser = argparse.ArgumentParser(
         description="Walk the dsc public API once against real hardware.",
     )
-    parser.add_argument("device", help="camera model, GS130WI or GS130W")
+    parser.add_argument("device", help="camera model, GS130WI, GS130WI_20260922 or GS130W")
     parser.add_argument("mode", choices=sorted(MODES), help="how frames are made")
     parser.add_argument("width", type=int, help="output width of one eye")
     parser.add_argument("height", type=int, help="output height of one eye")

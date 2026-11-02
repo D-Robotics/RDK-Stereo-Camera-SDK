@@ -23,7 +23,7 @@
 #include <cstdlib>
 #include <vector>
 
-using namespace dstereo-cam;
+using namespace dsc;
 
 namespace {
 

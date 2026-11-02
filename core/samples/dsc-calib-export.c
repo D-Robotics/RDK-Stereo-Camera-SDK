@@ -7,7 +7,7 @@
  *   Positional arguments, all required, no flags:
  *
  *   <dir>     output directory, created when missing
- *   <device>  device model: GS130WI | GS130W
+ *   <device>  device model: GS130WI | GS130WI_20260922 | GS130W
  *   <mode>    pipeline mode: raw | resize | rect (anything else means raw)
  *   <width>   output width in pixels
  *   <height>  output height in pixels
@@ -53,7 +53,7 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "dstereo_cam.h"
-#include "dsc_define.h"
+#include "dstereo_cam_define.h"
 
 #include <stdbool.h>
 #include <stdio.h>

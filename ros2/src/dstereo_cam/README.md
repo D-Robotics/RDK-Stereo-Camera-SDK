@@ -1,4 +1,4 @@
-# RDK Stereo Camera Module SDK — ROS 2 Interface
+# RDK Stereo Camera SDK — ROS 2 Interface
 
 **English** | [简体中文](README.zh-CN.md)
 
@@ -17,7 +17,7 @@
 
 ## Dependencies
 
-- **Hardware**: an RDK series development board with a stereo camera module (some models include an IMU). Currently supported: **RDK X5**, **RDK S100** and **RDK S600**.
+- **Hardware**: an RDK series development board with a stereo camera (some models include an IMU). Currently supported: **RDK X5**, **RDK S100** and **RDK S600**.
 - **ROS 2**: Humble or Jazzy. Source the distribution installed on the board, and on a TROS system source the TROS overlay after it:
 
   ```bash

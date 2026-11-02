@@ -22,7 +22,7 @@
 #include <cstdlib>
 #include <vector>
 
-using namespace dstereo-cam;
+using namespace dsc;
 
 /**
  * @brief Parse one command-line integer argument.
