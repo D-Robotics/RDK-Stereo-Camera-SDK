@@ -408,6 +408,14 @@ Status Pipeline::get_frame(CamIndex idx,
         return Status::ParamError;
     }
 
+    // A frame without LPWM trigger information has no exposure instant to pair with IMU
+    // samples, so it is dropped rather than delivered with a timestamp from another clock.
+    const uint64_t ts_ns = frame_ts_ns(img.info);
+    if(ts_ns == 0){
+        hbn_vnode_releaseframe(c.output_node, c.output_chn, &img);
+        return Status::HwError;
+    }
+
     // Copy row by row using each plane's stride
     for(uint32_t r = 0; r < height; ++r)
         memcpy(y + (std::size_t)r * y_stride,
@@ -416,7 +424,7 @@ Status Pipeline::get_frame(CamIndex idx,
         memcpy(uv + (std::size_t)r * uv_stride,
                img.buffer.virt_addr[1] + (std::size_t)r * img.buffer.stride, width);
 
-    *timestamp_ns = frame_ts_ns(img.info);
+    *timestamp_ns = ts_ns;
 
     hbn_vnode_releaseframe(c.output_node, c.output_chn, &img);
     return Status::Ok;

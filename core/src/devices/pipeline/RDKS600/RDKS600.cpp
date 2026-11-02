@@ -516,6 +516,15 @@ Status Pipeline::get_frame(CamIndex idx,
         return Status::ParamError;
     }
 
+    // A frame without LPWM trigger information has no exposure instant to pair with IMU
+    // samples, so it is dropped rather than delivered with a timestamp from another clock.
+    const uint64_t ts_ns = frame_ts_ns(grouped ? grp.info : img.info);
+    if(ts_ns == 0){
+        if(grouped)hbn_vnode_releaseframe_group(c.output_node, c.output_chn, &grp);
+        else       hbn_vnode_releaseframe(c.output_node, c.output_chn, &img);
+        return Status::HwError;
+    }
+
     // Copy row by row using each plane's stride. A captured RAW10 frame is a single
     // packed plane (the capture node reports plane_cnt 1 and leaves virt_addr[1] null),
     // so the second plane is only copied when the node actually produced one.
@@ -527,7 +536,7 @@ Status Pipeline::get_frame(CamIndex idx,
             memcpy(uv + (std::size_t)r * uv_stride,
                    buf.virt_addr[1] + (std::size_t)r * buf.stride, width);
 
-    *timestamp_ns = frame_ts_ns(grouped ? grp.info : img.info);
+    *timestamp_ns = ts_ns;
 
     if(grouped)hbn_vnode_releaseframe_group(c.output_node, c.output_chn, &grp);
     else       hbn_vnode_releaseframe(c.output_node, c.output_chn, &img);
