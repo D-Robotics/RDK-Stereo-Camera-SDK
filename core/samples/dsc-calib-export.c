@@ -53,7 +53,7 @@
  * See the LICENSE file in the project root for the full license text.
  */
 #include "dstereo_cam.h"
-#include "dsc_define.h"
+#include "dstereo_cam_define.h"
 
 #include <stdbool.h>
 #include <stdio.h>
