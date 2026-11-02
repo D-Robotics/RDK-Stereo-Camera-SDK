@@ -20,7 +20,7 @@
 #include "dstereo_cam_define.h"
 
 dsc_config_t dstereo_cam_config_from_define(
-  const char * device, dstereo_cam_mode_t mode,
+  const char * device, dsc_camera_mode_t mode,
   uint32_t width, uint32_t height, uint32_t fps, uint32_t odr,
   dsc_stereo_layout_t layout)
 {

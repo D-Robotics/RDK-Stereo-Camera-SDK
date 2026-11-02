@@ -89,7 +89,7 @@ def _imu_packet(raw):
 
 
 def _camera_intrinsics(raw):
-    """Build :class:`CameraIntrinsics` from a ``dstereo_cam_intrinsics_t``."""
+    """Build :class:`CameraIntrinsics` from a ``dsc_camera_intrinsics_t``."""
     return CameraIntrinsics(
         float(raw.fx),
         float(raw.fy),
@@ -356,7 +356,7 @@ class Device:
 
     def camera_intrinsics(self, camera):
         """Intrinsics of one eye; ``camera`` is a :class:`CameraIndex`."""
-        raw = _abi.dstereo_cam_intrinsics_t()
+        raw = _abi.dsc_camera_intrinsics_t()
         _check(
             self._lib.dsc_get_camera_intrinsics(
                 self._device(), camera, ctypes.byref(raw)

@@ -139,7 +139,7 @@ geometry_msgs::msg::Quaternion quaternion_from_R(const double R[9])
 }
 
 /** Convert a validated ROS parameter string to the SDK camera-mode enum. */
-dstereo_cam_mode_t camera_mode_of(const std::string & mode)
+dsc_camera_mode_t camera_mode_of(const std::string & mode)
 {
   if (mode == "raw") {
     return DSC_CAMERA_MODE_RAW;
@@ -260,8 +260,8 @@ private:
   dsc_device_t * device_ = nullptr;
   bool imu_present_ = false;
   bool calibrated_ = false;
-  dstereo_cam_intrinsics_t intrinsics_left_ = {};
-  dstereo_cam_intrinsics_t intrinsics_right_ = {};
+  dsc_camera_intrinsics_t intrinsics_left_ = {};
+  dsc_camera_intrinsics_t intrinsics_right_ = {};
   double stereo_T_[3] = {0.0, 0.0, 0.0};         // Translation of the left-to-right transform; used by P[3].
   double right_R_[9] = {1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
   double right_T_[3] = {0.0, 0.0, 0.0};          // Right sensor pose expressed in the left-camera frame.
@@ -491,7 +491,7 @@ void DstereoCamNode::publish_transforms()
 sensor_msgs::msg::CameraInfo DstereoCamNode::camera_info_for(
   bool left_eye, const rclcpp::Time & stamp) const
 {
-  const dstereo_cam_intrinsics_t & intrinsics = left_eye ? intrinsics_left_ : intrinsics_right_;
+  const dsc_camera_intrinsics_t & intrinsics = left_eye ? intrinsics_left_ : intrinsics_right_;
 
   sensor_msgs::msg::CameraInfo info;
   info.header.stamp = stamp;
