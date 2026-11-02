@@ -8,7 +8,7 @@
 -->
 <package format="3">
   <name>dstereo_cam</name>
-  <version>0.1.0</version>
+  <version>0.1.1</version>
   <description>
     ROS 2 driver for the RDK stereo camera and its optional IMU. It publishes
     images, camera calibration, inertial samples, and static sensor transforms
