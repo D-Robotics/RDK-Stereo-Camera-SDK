@@ -36,25 +36,20 @@ constexpr uint16_t kChipIdReg = 0x3107;
 constexpr uint16_t kChipId    = 0x0132;
 
 /**
- * @brief Convert a driver frame timestamp to nanoseconds.
+ * @brief Convert the driver's LPWM trigger timestamp to nanoseconds.
  *
- * Preference order: trig_tv (LPWM rising edge = exposure trigger time), then the
- * driver's timestamps field, then tv (the time the frame was ready). The exposure
- * time is what the IMU pairing needs, so the other two are only fallbacks for when
- * the trigger information is missing.
+ * Only trig_tv, the LPWM rising edge (exposure trigger instant), is used: that is the
+ * instant the IMU pairing needs. There is deliberately no fallback to the driver's
+ * timestamps field or to tv, so a frame without trigger information reports 0 rather
+ * than a value from a different clock.
  *
  * @param[in] info Frame information returned with the frame.
- * @return Timestamp in nanoseconds on the device clock.
+ * @return Timestamp in nanoseconds on the device clock, or 0 when trig_tv is unset.
  */
 uint64_t frame_ts_ns(const hbn_frame_info_t &info)
 {
-    if(info.trig_tv.tv_sec != 0 || info.trig_tv.tv_usec != 0)
-        return static_cast<uint64_t>(info.trig_tv.tv_sec) * 1000000000ULL +
-               static_cast<uint64_t>(info.trig_tv.tv_usec) * 1000ULL;
-    if(info.timestamps != 0)
-        return info.timestamps;
-    return static_cast<uint64_t>(info.tv.tv_sec) * 1000000000ULL +
-           static_cast<uint64_t>(info.tv.tv_usec) * 1000ULL;
+    return static_cast<uint64_t>(info.trig_tv.tv_sec) * 1000000000ULL +
+           static_cast<uint64_t>(info.trig_tv.tv_usec) * 1000ULL;
 }
 
 } // namespace
