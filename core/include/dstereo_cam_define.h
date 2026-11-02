@@ -2,7 +2,7 @@
  * @file dsc_define.h
  * @brief Optional preset configurations for supported DSC modules.
  *
- * Include dstereo-cam.h, string.h, stdio.h, and stdlib.h before this header. These
+ * Include dstereo_cam.h, string.h, stdio.h, and stdlib.h before this header. These
  * initializers use GNU C designated-range syntax and compound literals; they are
  * intended for the project's GNU C build and are not a portable C++ interface.
  *
