@@ -409,7 +409,8 @@ Status Pipeline::get_frame(CamIndex idx,
     }
 
     // A frame without LPWM trigger information has no exposure instant to pair with IMU
-    // samples, so it is dropped rather than delivered with a timestamp from another clock.
+    // samples: this is a hardware fault, reported as HwError so the capture thread stops
+    // instead of delivering a timestamp from another clock.
     const uint64_t ts_ns = frame_ts_ns(img.info);
     if(ts_ns == 0){
         hbn_vnode_releaseframe(c.output_node, c.output_chn, &img);
