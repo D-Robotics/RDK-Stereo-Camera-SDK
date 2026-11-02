@@ -1,4 +1,4 @@
-# RDK 双目摄像头模组 SDK —— ROS 2 接口
+# RDK 双目相机 SDK —— ROS 2 接口
 
 **简体中文** | [English](README.md)
 
@@ -17,7 +17,7 @@
 
 ## 依赖
 
-- **硬件**：一块 RDK 系列开发板与一个双目摄像头模组（部分型号带 IMU）。当前支持 **RDK X5**、**RDK S100**、**RDK S600**。
+- **硬件**：一块 RDK 系列开发板与一个双目相机（部分型号带 IMU）。当前支持 **RDK X5**、**RDK S100**、**RDK S600**。
 - **ROS 2**：Humble 或 Jazzy。先 source 板上安装的发行版，TROS 系统上再 source TROS 的 overlay：
 
   ```bash

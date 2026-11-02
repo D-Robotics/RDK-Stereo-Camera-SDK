@@ -1,8 +1,8 @@
-# RDK Stereo Camera Module SDK
+# RDK Stereo Camera SDK
 
 **English** | [简体中文](README.zh-CN.md)
 
-The RDK Stereo Camera Module SDK supports the RDK stereo camera and its onboard IMU on RDK boards. It consists of a native C library plus Python and ROS 2 wrappers built on it.
+The RDK Stereo Camera SDK supports the RDK stereo camera and its onboard IMU on RDK boards. It consists of a native C library plus Python and ROS 2 wrappers built on it.
 
 > **Developer preview (Alpha).** This release is intended for evaluation. Interfaces, configuration presets and behaviour may change without notice. Feedback and contributions are welcome through the [D-Robotics developer community](https://forum.d-robotics.cc/).
 
@@ -20,7 +20,7 @@ Core must be installed before either wrapper can be used.
 
 ## Requirements
 
-- **Hardware**: an RDK development board and a stereo camera module. Some models include an IMU.
+- **Hardware**: an RDK development board and a stereo camera. Some models include an IMU.
 - **Core**: the Horizon multimedia libraries, OpenCV 4 and TBB (all shipped with RDK OS).
 - **Python wrapper**: Python 3.10 or later and `numpy`. Building the wheel additionally requires `setuptools` and `wheel`.
 - **ROS 2 wrapper**: ROS 2 Humble or Jazzy. The web preview and stereo depth launch files also require the TROS packages `hobot_codec`, `websocket` and `hobot_stereonet`.
