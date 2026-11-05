@@ -48,8 +48,8 @@ class CameraMode(IntEnum):
 
 
 class CameraIndex(IntEnum):
-    RIGHT = _abi.dstereo_cam_index_t.DSC_CAMERA_RIGHT_IDX
-    LEFT = _abi.dstereo_cam_index_t.DSC_CAMERA_LEFT_IDX
+    RIGHT = _abi.dsc_camera_index_t.DSC_CAMERA_RIGHT_IDX
+    LEFT = _abi.dsc_camera_index_t.DSC_CAMERA_LEFT_IDX
 
 
 class StereoLayout(IntEnum):

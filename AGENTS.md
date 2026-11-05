@@ -55,6 +55,8 @@ source install/setup.bash
 
 ROS link: `find_library(dstereocam)`; header: `core/include` via `../../../`, else `$DSC_ROOT/include`. Override: `--cmake-args -DDSC_LIBRARY= -DDSC_INCLUDE_DIR=`.
 
+Presets are expanded at compile time: `DSC_CONFIG()` lives in `dstereo_cam_define.h`, which is a system header once the deb is installed, and neither `make` nor `colcon` tracks it. After changing a preset, rebuild and reinstall the core, then delete `ros2/build` and `ros2/install` before `colcon build`; an incremental ROS build keeps the old mapping and the node silently runs the previous preset.
+
 ## Secondary development
 
 | Change | Edit |

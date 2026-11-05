@@ -130,6 +130,48 @@ def DSC_CONFIG_RDKX5_GS130W(mode, width, height, fps, odr):
     return values
 
 
+def DSC_CONFIG_RDKX5_YG_U211A(mode, width, height, fps, odr):
+    """Mirror of the ``DSC_CONFIG_RDKX5_YG_U211A`` macro.
+
+    Landscape module with a 35 mm baseline and no IMU.  The left eye answers at 0x33
+    on bus 6 and carries the calibration EEPROM at 0x50; the right eye answers at
+    0x32 on bus 4.  The SZYGSJKJ pinhole V1.2 driver supplies the 90 degree
+    installation angle.
+    """
+    values = config()
+    values["camera_config"].update(
+        bus=[6, 4],
+        left_addr=0x33,
+        right_addr=0x32,
+        sensor_width=1088,
+        sensor_height=1280,
+        fps=fps,
+        line_length=1400,
+        frame_length=1500,
+        tuning_file=None,
+        output_width=width,
+        output_height=height,
+        mode=mode,
+        stereo_layout=StereoLayout.NONE,
+        bus_mipi_rx={4: 2, 6: 0},
+        bus_reset_gpio={4: 351, 6: 353},
+        fsync_camera=CameraIndex.RIGHT,
+    )
+    values["imu_config"].update(
+        bus=[],
+        addr=0x68,
+        odr_hz=odr,
+        accel_fsr_g=16,
+        gyro_fsr_dps=2000,
+        accel_bw_sel=0,
+        gyro_bw_sel=0,
+    )
+    values["eeprom_config"].update(bus=[4, 6], addr=0x50)
+    values["camera_fifo"].update(depth=4, mode=FifoMode.DROP_OLD)
+    values["imu_fifo"].update(depth=0, mode=FifoMode.DROP_NEW)
+    return values
+
+
 def DSC_CONFIG_RDKS100_GS130WI(mode, width, height, fps, odr):
     """Mirror of the ``DSC_CONFIG_RDKS100_GS130WI`` macro."""
     values = config()
@@ -318,10 +360,14 @@ def DSC_CONFIG_RDKS600_GS130W(mode, width, height, fps, odr):
 
 PRESETS = {
     ("RDKX5", "GS130WI"): DSC_CONFIG_RDKX5_GS130WI,
+    ("RDKX5", "GS130WI_20260922"): DSC_CONFIG_RDKX5_GS130WI_20260922,
     ("RDKX5", "GS130W"): DSC_CONFIG_RDKX5_GS130W,
+    ("RDKX5", "YG_U211A"): DSC_CONFIG_RDKX5_YG_U211A,
     ("RDKS100", "GS130WI"): DSC_CONFIG_RDKS100_GS130WI,
+    ("RDKS100", "GS130WI_20260922"): DSC_CONFIG_RDKS100_GS130WI_20260922,
     ("RDKS100", "GS130W"): DSC_CONFIG_RDKS100_GS130W,
     ("RDKS600", "GS130WI"): DSC_CONFIG_RDKS600_GS130WI,
+    ("RDKS600", "GS130WI_20260922"): DSC_CONFIG_RDKS600_GS130WI_20260922,
     ("RDKS600", "GS130W"): DSC_CONFIG_RDKS600_GS130W,
 }
 

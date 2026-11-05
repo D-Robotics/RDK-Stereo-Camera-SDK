@@ -7,7 +7,7 @@
  *   Positional arguments, all required, no flags:
  *
  *   <dir>     output directory, created when missing
- *   <device>  device model: GS130WI | GS130WI_20260922 | GS130W
+ *   <device>  device model: YG_U211A | GS130WI | GS130WI_20260922 | GS130W
  *   <mode>    pipeline mode: raw | resize | rect (anything else means raw)
  *   <width>   output width in pixels
  *   <height>  output height in pixels
