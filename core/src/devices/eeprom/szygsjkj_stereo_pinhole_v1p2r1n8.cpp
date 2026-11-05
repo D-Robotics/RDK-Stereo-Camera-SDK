@@ -1,6 +1,6 @@
 /**
  * @file szygsjkj_stereo_pinhole_v1p2r1n8.cpp
- * @brief SZYGSJKJ stereo (no IMU), pinhole, v1.1, rotation index 1 (=90 deg), 8 distortion coefficients.
+ * @brief SZYGSJKJ stereo (no IMU), pinhole, v1.2, rotation index 1 (=90 deg), 8 distortion coefficients.
  *
  * This file is self-contained: header, checksum, offsets, and field widths are all local; no code is shared with other models.
  *
@@ -8,7 +8,9 @@
  * Floating-point fields are copied directly into host float/double objects; this format
  * therefore assumes the EEPROM encoding matches the target's IEEE-754 byte order.
  *
- * The layout of this variant is byte-for-byte the same as
+ * Unlike v1.1, this variant writes the two intrinsics blocks in the opposite eye order
+ * and stores the extrinsics as the right camera's pose in the left frame; both
+ * differences are handled in read().  Otherwise the layout is byte-for-byte the same as
  * szygsjkj_stereo_imu_fisheye_v1p2r0n4.cpp for everything up to the stereo extrinsics:
  * both intrinsics blocks are 56 bytes (2 ints, then fx/fy/cx/cy, then eight float
  * coefficient slots) and the right block starts at 0x0048.  The two variants differ in
@@ -139,20 +141,36 @@ Status read(base::I2cDevice &bus, StereoImuModel *out)
 
     *out = StereoImuModel{};
 
-    // The EEPROM L/R blocks map directly to the module's left/right cameras
-    read_intrinsics(buf, &out->cam_left,  kLBlock);
-    read_intrinsics(buf, &out->cam_right, kRBlock);
+    // V1.2 keeps the V1.1 block sizes and offsets but differs in two ways, both
+    // established by measuring the residual vertical disparity of a rectified pair (it
+    // fell from 5.9 px to 0.01 px only when both differences were applied):
+    //   - the blocks are written in the opposite eye order, so the block at 0x0010 is the
+    //     right eye and the block at 0x0048 is the left eye;
+    //   - the extrinsics hold the right camera's pose in the left frame, while the SDK
+    //     wants the left camera's pose in the right frame, so they are inverted below.
+    read_intrinsics(buf, &out->cam_right, kLBlock);
+    read_intrinsics(buf, &out->cam_left,  kRBlock);
 
     out->install_angle = static_cast<int>(buf[kRotationOff]) * kQuarterTurnDeg;
 
-    // This layout uses the right camera as the common reference frame, so cam_right is the identity transform
+    // The right camera is the common reference frame, so cam_right is the identity
+    // transform and cam_left is the inverse of the stored pose: R = R^T, T = -R^T * t.
+    double r_stored[9];
+    double t_stored[3];
+    for(uint8_t i = 0; i < 9; i++)
+        r_stored[i] = read_float(buf, kStereoR + i * 4);
+    for(uint8_t i = 0; i < 3; i++)
+        t_stored[i] = read_float(buf, kStereoT + i * 4);
+
     for(uint8_t i = 0; i < 9; i++){
-        out->cam_right_R[i] = (i % 4 == 0) ? 1.0f : 0.0f;
-        out->cam_left_R[i]  = read_float(buf, kStereoR + i * 4);
+        out->cam_right_R[i] = (i % 4 == 0) ? 1.0 : 0.0;
+        out->cam_left_R[i]  = r_stored[(i % 3) * 3 + (i / 3)];   /* transpose */
     }
     for(uint8_t i = 0; i < 3; i++){
-        out->cam_right_T[i] = 0.0f;
-        out->cam_left_T[i]  = read_float(buf, kStereoT + i * 4);
+        out->cam_right_T[i] = 0.0;
+        out->cam_left_T[i]  = -(out->cam_left_R[i * 3 + 0] * t_stored[0] +
+                                out->cam_left_R[i * 3 + 1] * t_stored[1] +
+                                out->cam_left_R[i * 3 + 2] * t_stored[2]);
     }
 
     // No IMU on this module: its area reads back as 0xFF and carries no checksum to verify,
