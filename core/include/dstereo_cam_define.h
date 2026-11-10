@@ -129,7 +129,7 @@
     },                                                                      \
     .imu_config = {                                                         \
         .bus = {4, 6}, .bus_num = 2, .addr = 0x68,                          \
-        .odr_hz = (odr_), .accel_fsr_g = 16, .gyro_fsr_dps = 2000,          \
+        .odr_hz = 400, .accel_fsr_g = 16, .gyro_fsr_dps = 2000,          \
         .accel_bw_sel = 0, .gyro_bw_sel = 0,                                \
     },                                                                      \
     .eeprom_config = { .bus = {4, 6}, .bus_num = 2, .addr = 0x50 },         \
