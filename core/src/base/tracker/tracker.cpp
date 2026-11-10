@@ -81,8 +81,12 @@ void TimestampTracker::feed_slave_sample(
         // both Phase::WaitTwoMaster and Phase::WaitKeyPoint conditions are met
         if(fsync && slave_.phase == Phase::WaitKeyPoint){
             slave_.phase = Phase::Tracking;
-            slave_.last_anchor_edge_timestamp_ns = master_.first_ns;
-            slave_.last_anchor_sample_timestamp_ns = master_.first_ns + slave_.first_delta_time_ns;
+            // The tracking step below advances the edge by one period, and the key anchor
+            // is the anchor nearest to the newest master timestamp, so the stored edge is
+            // that timestamp minus one period.
+            slave_.last_anchor_edge_timestamp_ns = master_.last_ns - master_cycle_ns_;
+            slave_.last_anchor_sample_timestamp_ns = master_.last_ns + slave_.first_delta_time_ns;
+            slave_.anchor_count = 0;
         }
 
         // count during the wait phases
