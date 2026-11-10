@@ -37,13 +37,15 @@
 int vin_open(hbn_vnode_handle_t *vin, int mipi_rx,
              uint32_t width, uint32_t height, uint32_t fps)
 {
-    /* One frame per LPWM period.  Registers hold one less / one more than the times
-       they describe: the hardware emits (period + 1) us, so 30 fps needs 33332 in the
-       period register, and it starts the pulse (offset - 1) us after the trigger, so the
-       10 us left over by 30 fps is 11 in the offset register.  A rate that divides the
-       second exactly, such as 20 or 50 fps, leaves no gap and uses offset 1. */
-    const uint32_t period_us = 1000000U / fps;
-    const uint32_t offset_us = 1000000U - period_us * fps;
+    /* One frame per LPWM period.  The software trigger restarts the waveform once per
+       second, so the frame train has to end at least 10 us before that edge; a rate that
+       divides the second exactly (20, 25, 50 fps) is shortened by one microsecond until
+       it does.  The offset register then holds that leftover rest plus one, because the
+       hardware counts the delay from one. */
+    uint32_t period_us = 1000000U / fps;
+    while(1000000U - period_us * fps < 10U && period_us > 10U)
+        period_us--;
+    const uint32_t offset_us = 1000000U - period_us * fps + 1U;
     /* Packed RAW10 line, then rounded up to the plane alignment the ISP checks against. */
     const uint32_t ochn_wstride =
         (((width * 10U / 8U) + DSC_VIN_WSTRIDE_ALIGN - 1U) / DSC_VIN_WSTRIDE_ALIGN)
@@ -81,8 +83,8 @@ int vin_open(hbn_vnode_handle_t *vin, int mipi_rx,
         attr.vin_node_attr.lpwm_attr.lpwm_chn_attr[ch].enable        = 1;
         attr.vin_node_attr.lpwm_attr.lpwm_chn_attr[ch].trigger_source = 0;
         attr.vin_node_attr.lpwm_attr.lpwm_chn_attr[ch].trigger_mode   = 0;
-        attr.vin_node_attr.lpwm_attr.lpwm_chn_attr[ch].period         = period_us - 1;
-        attr.vin_node_attr.lpwm_attr.lpwm_chn_attr[ch].offset         = offset_us + 1;
+        attr.vin_node_attr.lpwm_attr.lpwm_chn_attr[ch].period         = period_us;
+        attr.vin_node_attr.lpwm_attr.lpwm_chn_attr[ch].offset         = offset_us;
         attr.vin_node_attr.lpwm_attr.lpwm_chn_attr[ch].duty_time      = 999;
         attr.vin_node_attr.lpwm_attr.lpwm_chn_attr[ch].threshold      = 0;
         attr.vin_node_attr.lpwm_attr.lpwm_chn_attr[ch].adjust_step    = 0;
