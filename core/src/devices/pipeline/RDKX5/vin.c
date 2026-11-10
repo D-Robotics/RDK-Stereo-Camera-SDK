@@ -22,7 +22,16 @@
 int vin_open(hbn_vnode_handle_t *vin, int mipi_rx,
              uint32_t width, uint32_t height, uint32_t fps)
 {
-    const uint32_t period_us = 1000000U / fps;   /* LPWM period = one frame, in us */
+    /* One frame per LPWM period.  The register holds period-1: the hardware emits
+       (period + 1) us, so 30 fps needs 33332 in the register, not 33333, and the duty
+       cycle is the same: 999 puts the trigger pulse at 1000 us high.  The offset
+       register holds the gap plus one as well, because the hardware starts the pulse
+       (offset - 1) us after the trigger: 30 fps leaves 10 us of the second, which is 11
+       in the register.  A rate that divides the second exactly, such as 20 or 50 fps,
+       leaves no gap and uses 1, the smallest value that keeps the pulse inside the
+       second. */
+    uint32_t period_us = 1000000U / fps;
+    uint32_t offset_us = 1000000U - period_us * fps;
 
     vin_node_attr_t node = {
         .cim_attr = {
@@ -44,14 +53,14 @@ int vin_open(hbn_vnode_handle_t *vin, int mipi_rx,
         .lpwm_attr = {
             .enable = 1,
             .lpwm_chn_attr = {
-                [0] = { .trigger_source = 0, .trigger_mode = 0, .period = period_us,
-                        .offset = 10, .duty_time = 1000, .threshold = 0, .adjust_step = 0 },
-                [1] = { .trigger_source = 0, .trigger_mode = 0, .period = period_us,
-                        .offset = 10, .duty_time = 1000, .threshold = 0, .adjust_step = 0 },
-                [2] = { .trigger_source = 0, .trigger_mode = 0, .period = period_us,
-                        .offset = 10, .duty_time = 1000, .threshold = 0, .adjust_step = 0 },
-                [3] = { .trigger_source = 0, .trigger_mode = 0, .period = period_us,
-                        .offset = 10, .duty_time = 1000, .threshold = 0, .adjust_step = 0 },
+                [0] = { .trigger_source = 0, .trigger_mode = 0, .period = period_us - 1,
+                        .offset = offset_us + 1, .duty_time = 999, .threshold = 0, .adjust_step = 0 },
+                [1] = { .trigger_source = 0, .trigger_mode = 0, .period = period_us - 1,
+                        .offset = offset_us + 1, .duty_time = 999, .threshold = 0, .adjust_step = 0 },
+                [2] = { .trigger_source = 0, .trigger_mode = 0, .period = period_us - 1,
+                        .offset = offset_us + 1, .duty_time = 999, .threshold = 0, .adjust_step = 0 },
+                [3] = { .trigger_source = 0, .trigger_mode = 0, .period = period_us - 1,
+                        .offset = offset_us + 1, .duty_time = 999, .threshold = 0, .adjust_step = 0 },
             },
         },
     };
