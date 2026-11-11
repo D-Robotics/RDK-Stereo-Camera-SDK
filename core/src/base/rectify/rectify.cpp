@@ -194,9 +194,8 @@ double find_best_fov_scale(DistModel model,
     return best;
 }
 
-// Right-camera pose in the left-camera frame: R_r2l = lR*rR^T, t_r2l = lT - R_r2l*rT
-// Inputs are the sensor-to-reference poses of types.hpp, so the result is the pose of the
-// right camera expressed in the left camera frame.
+// Point transform from the left camera frame to the right camera frame, as expected by
+// OpenCV stereoRectify(camera1=left, camera2=right): p_right = R_r2l*p_left + t_r2l.
 void relative_pose(const double *lR, const double *lT,
                    const double *rR, const double *rT,
                    cv::Mat &R_r2l, cv::Mat &t_r2l)
@@ -205,8 +204,10 @@ void relative_pose(const double *lR, const double *lT,
     const cv::Mat rRm(3, 3, CV_64F, const_cast<double *>(rR));
     const cv::Mat lTm(3, 1, CV_64F, const_cast<double *>(lT));
     const cv::Mat rTm(3, 1, CV_64F, const_cast<double *>(rT));
-    R_r2l = lRm * rRm.t();
-    t_r2l = lTm - R_r2l * rTm;
+    // The inputs are sensor-to-reference transforms:
+    // p_ref = lR*p_left + lT = rR*p_right + rT.
+    R_r2l = rRm.t() * lRm;
+    t_r2l = rRm.t() * (lTm - rTm);
 }
 
 // OpenCV K from the calibration fields; the skew is 0 and the last row is (0,0,1).
