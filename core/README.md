@@ -14,6 +14,12 @@
 | --- | --- | --- | --- | --- |
 | GS130W | Dual SC132GS, no IMU, landscape 1280×1088, 80 mm baseline | Supported | Supported | Supported |
 | GS130WI | Dual SC132GS, IMU model ICM42688-P, portrait 1088×1280, 70 mm baseline | Supported | Supported | Supported |
+| A1 | A1P without the IMU | Supported | Preset | Preset |
+| A1P | Dual SC132GS, IMU model ICM-42607-C, portrait 1088×1280, 70 mm baseline | Supported | Preset | Preset |
+
+**Supported** means the model has been built and run on that platform. **Preset** means
+the bus, MIPI, reset and IMU configuration is available, but hardware validation is still
+pending. The tables above list the main camera models.
 
 ## 2 Build and Installation
 
@@ -127,7 +133,7 @@ The `dsc shell` command locks a device configuration for continuous debugging; s
 dsc shell -d GS130WI [-m rect] [-w 1088] [-h 1280] [-f 30] [-o 200]
 ```
 
-- `-d <model>`: device model, required, `GS130W` or `GS130WI`
+- `-d <model>`: device model, required: `GS130W`, `GS130WI`, `A1` or `A1P`
 - `-m <output mode>`: output mode, default `rect`
   - `raw`: original image without distortion correction
   - `resize`: center-cropped and scaled image, aspect ratio preserved

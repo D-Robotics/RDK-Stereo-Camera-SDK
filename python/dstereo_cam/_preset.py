@@ -358,17 +358,72 @@ def DSC_CONFIG_RDKS600_GS130W(mode, width, height, fps, odr):
     return values
 
 
+def _without_imu(values):
+    """Match a C preset whose IMU bus and FIFO fields stay zero-initialised."""
+    values["imu_config"].update(bus=[])
+    values["imu_fifo"].update(depth=0, mode=FifoMode.DROP_NEW)
+    return values
+
+
+def DSC_CONFIG_RDKX5_A1P(mode, width, height, fps, odr):
+    """Mirror of the ``DSC_CONFIG_RDKX5_A1P`` macro."""
+    return DSC_CONFIG_RDKX5_GS130WI(mode, width, height, fps, odr)
+
+
+def DSC_CONFIG_RDKX5_A1(mode, width, height, fps, odr):
+    """Mirror of the ``DSC_CONFIG_RDKX5_A1`` macro: A1P without the IMU."""
+    return _without_imu(DSC_CONFIG_RDKX5_A1P(mode, width, height, fps, odr))
+
+
+def DSC_CONFIG_RDKS100_YG_U211A(mode, width, height, fps, odr):
+    """Mirror of the ``DSC_CONFIG_RDKS100_YG_U211A`` macro."""
+    return DSC_CONFIG_RDKS100_GS130W(mode, width, height, fps, odr)
+
+
+def DSC_CONFIG_RDKS100_A1P(mode, width, height, fps, odr):
+    """Mirror of the ``DSC_CONFIG_RDKS100_A1P`` macro."""
+    return DSC_CONFIG_RDKS100_GS130WI(mode, width, height, fps, odr)
+
+
+def DSC_CONFIG_RDKS100_A1(mode, width, height, fps, odr):
+    """Mirror of the ``DSC_CONFIG_RDKS100_A1`` macro: A1P without the IMU."""
+    return _without_imu(DSC_CONFIG_RDKS100_A1P(mode, width, height, fps, odr))
+
+
+def DSC_CONFIG_RDKS600_YG_U211A(mode, width, height, fps, odr):
+    """Mirror of the ``DSC_CONFIG_RDKS600_YG_U211A`` macro."""
+    return DSC_CONFIG_RDKS600_GS130W(mode, width, height, fps, odr)
+
+
+def DSC_CONFIG_RDKS600_A1P(mode, width, height, fps, odr):
+    """Mirror of the ``DSC_CONFIG_RDKS600_A1P`` macro."""
+    return DSC_CONFIG_RDKS600_GS130WI(mode, width, height, fps, odr)
+
+
+def DSC_CONFIG_RDKS600_A1(mode, width, height, fps, odr):
+    """Mirror of the ``DSC_CONFIG_RDKS600_A1`` macro: A1P without the IMU."""
+    return _without_imu(DSC_CONFIG_RDKS600_A1P(mode, width, height, fps, odr))
+
+
 PRESETS = {
-    ("RDKX5", "GS130WI"): DSC_CONFIG_RDKX5_GS130WI,
-    ("RDKX5", "GS130WI_20260922"): DSC_CONFIG_RDKX5_GS130WI_20260922,
     ("RDKX5", "GS130W"): DSC_CONFIG_RDKX5_GS130W,
+    ("RDKX5", "GS130WI"): DSC_CONFIG_RDKX5_GS130WI,
+    ("RDKX5", "A1"): DSC_CONFIG_RDKX5_A1,
+    ("RDKX5", "A1P"): DSC_CONFIG_RDKX5_A1P,
+    ("RDKX5", "GS130WI_20260922"): DSC_CONFIG_RDKX5_GS130WI_20260922,
     ("RDKX5", "YG_U211A"): DSC_CONFIG_RDKX5_YG_U211A,
-    ("RDKS100", "GS130WI"): DSC_CONFIG_RDKS100_GS130WI,
-    ("RDKS100", "GS130WI_20260922"): DSC_CONFIG_RDKS100_GS130WI_20260922,
     ("RDKS100", "GS130W"): DSC_CONFIG_RDKS100_GS130W,
-    ("RDKS600", "GS130WI"): DSC_CONFIG_RDKS600_GS130WI,
-    ("RDKS600", "GS130WI_20260922"): DSC_CONFIG_RDKS600_GS130WI_20260922,
+    ("RDKS100", "GS130WI"): DSC_CONFIG_RDKS100_GS130WI,
+    ("RDKS100", "A1"): DSC_CONFIG_RDKS100_A1,
+    ("RDKS100", "A1P"): DSC_CONFIG_RDKS100_A1P,
+    ("RDKS100", "GS130WI_20260922"): DSC_CONFIG_RDKS100_GS130WI_20260922,
+    ("RDKS100", "YG_U211A"): DSC_CONFIG_RDKS100_YG_U211A,
     ("RDKS600", "GS130W"): DSC_CONFIG_RDKS600_GS130W,
+    ("RDKS600", "GS130WI"): DSC_CONFIG_RDKS600_GS130WI,
+    ("RDKS600", "A1"): DSC_CONFIG_RDKS600_A1,
+    ("RDKS600", "A1P"): DSC_CONFIG_RDKS600_A1P,
+    ("RDKS600", "GS130WI_20260922"): DSC_CONFIG_RDKS600_GS130WI_20260922,
+    ("RDKS600", "YG_U211A"): DSC_CONFIG_RDKS600_YG_U211A,
 }
 
 

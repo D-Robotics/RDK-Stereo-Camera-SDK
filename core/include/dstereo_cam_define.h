@@ -27,24 +27,24 @@
 #define DSC_CONFIG(device, mode, w, h, fps, odr) DSC_CONFIG_PLATFORM(dsc_platform(), device, mode, w, h, fps, odr)
 
 #define DSC_CONFIG_PLATFORM(platform, device, mode, w, h, fps, odr) \
-    strcmp((platform), "RDKX5") == 0 && strcmp((device), "GS130WI")            == 0 ? (dsc_config_t) DSC_CONFIG_RDKX5_GS130WI((mode), (w), (h), (fps), (odr)) : \
-    strcmp((platform), "RDKX5") == 0 && strcmp((device), "GS130WI_20260922")            == 0 ? (dsc_config_t) DSC_CONFIG_RDKX5_GS130WI_20260922((mode), (w), (h), (fps), (odr)) : \
     strcmp((platform), "RDKX5") == 0 && strcmp((device), "GS130W")             == 0 ? (dsc_config_t) DSC_CONFIG_RDKX5_GS130W((mode), (w), (h), (fps), (odr))  : \
+    strcmp((platform), "RDKX5") == 0 && strcmp((device), "GS130WI")            == 0 ? (dsc_config_t) DSC_CONFIG_RDKX5_GS130WI((mode), (w), (h), (fps), (odr)) : \
+    strcmp((platform), "RDKX5") == 0 && strcmp((device), "A1")                 == 0 ? (dsc_config_t) DSC_CONFIG_A1((mode), (w), (h), (fps), (odr)) : \
+    strcmp((platform), "RDKX5") == 0 && strcmp((device), "A1P")                == 0 ? (dsc_config_t) DSC_CONFIG_A1P((mode), (w), (h), (fps), (odr)) : \
+    strcmp((platform), "RDKX5") == 0 && strcmp((device), "GS130WI_20260922")   == 0 ? (dsc_config_t) DSC_CONFIG_RDKX5_GS130WI_20260922((mode), (w), (h), (fps), (odr)) : \
     strcmp((platform), "RDKX5") == 0 && strcmp((device), "YG_U211A")           == 0 ? (dsc_config_t) DSC_CONFIG_RDKX5_YG_U211A((mode), (w), (h), (fps), (odr)) : \
-    strcmp((platform), "RDKX5") == 0 && strcmp((device), "A1P")   == 0 ? (dsc_config_t) DSC_CONFIG_A1P((mode), (w), (h), (fps), (odr)) : \
-    strcmp((platform), "RDKX5") == 0 && strcmp((device), "A1")    == 0 ? (dsc_config_t) DSC_CONFIG_A1((mode), (w), (h), (fps), (odr)) : \
-    strcmp((platform), "RDKS100") == 0 && strcmp((device), "GS130WI")          == 0 ? (dsc_config_t) DSC_CONFIG_RDKS100_GS130WI((mode), (w), (h), (fps), (odr)) : \
-    strcmp((platform), "RDKS100") == 0 && strcmp((device), "GS130WI_20260922")          == 0 ? (dsc_config_t) DSC_CONFIG_RDKS100_GS130WI_20260922((mode), (w), (h), (fps), (odr)) : \
     strcmp((platform), "RDKS100") == 0 && strcmp((device), "GS130W")           == 0 ? (dsc_config_t) DSC_CONFIG_RDKS100_GS130W((mode), (w), (h), (fps), (odr))  : \
-    strcmp((platform), "RDKS100") == 0 && strcmp((device), "YG_U211A")         == 0 ? (dsc_config_t) DSC_CONFIG_RDKS100_YG_U211A((mode), (w), (h), (fps), (odr)) : \
-    strcmp((platform), "RDKS100") == 0 && strcmp((device), "A1P")              == 0 ? (dsc_config_t) DSC_CONFIG_RDKS100_A1P((mode), (w), (h), (fps), (odr)) : \
+    strcmp((platform), "RDKS100") == 0 && strcmp((device), "GS130WI")          == 0 ? (dsc_config_t) DSC_CONFIG_RDKS100_GS130WI((mode), (w), (h), (fps), (odr)) : \
     strcmp((platform), "RDKS100") == 0 && strcmp((device), "A1")               == 0 ? (dsc_config_t) DSC_CONFIG_RDKS100_A1((mode), (w), (h), (fps), (odr)) : \
-    strcmp((platform), "RDKS600") == 0 && strcmp((device), "GS130WI")          == 0 ? (dsc_config_t) DSC_CONFIG_RDKS600_GS130WI((mode), (w), (h), (fps), (odr)) : \
-    strcmp((platform), "RDKS600") == 0 && strcmp((device), "GS130WI_20260922")          == 0 ? (dsc_config_t) DSC_CONFIG_RDKS600_GS130WI_20260922((mode), (w), (h), (fps), (odr)) : \
+    strcmp((platform), "RDKS100") == 0 && strcmp((device), "A1P")              == 0 ? (dsc_config_t) DSC_CONFIG_RDKS100_A1P((mode), (w), (h), (fps), (odr)) : \
+    strcmp((platform), "RDKS100") == 0 && strcmp((device), "GS130WI_20260922") == 0 ? (dsc_config_t) DSC_CONFIG_RDKS100_GS130WI_20260922((mode), (w), (h), (fps), (odr)) : \
+    strcmp((platform), "RDKS100") == 0 && strcmp((device), "YG_U211A")         == 0 ? (dsc_config_t) DSC_CONFIG_RDKS100_YG_U211A((mode), (w), (h), (fps), (odr)) : \
     strcmp((platform), "RDKS600") == 0 && strcmp((device), "GS130W")           == 0 ? (dsc_config_t) DSC_CONFIG_RDKS600_GS130W((mode), (w), (h), (fps), (odr))  : \
-    strcmp((platform), "RDKS600") == 0 && strcmp((device), "YG_U211A")         == 0 ? (dsc_config_t) DSC_CONFIG_RDKS600_YG_U211A((mode), (w), (h), (fps), (odr)) : \
-    strcmp((platform), "RDKS600") == 0 && strcmp((device), "A1P")              == 0 ? (dsc_config_t) DSC_CONFIG_RDKS600_A1P((mode), (w), (h), (fps), (odr)) : \
+    strcmp((platform), "RDKS600") == 0 && strcmp((device), "GS130WI")          == 0 ? (dsc_config_t) DSC_CONFIG_RDKS600_GS130WI((mode), (w), (h), (fps), (odr)) : \
     strcmp((platform), "RDKS600") == 0 && strcmp((device), "A1")               == 0 ? (dsc_config_t) DSC_CONFIG_RDKS600_A1((mode), (w), (h), (fps), (odr)) : \
+    strcmp((platform), "RDKS600") == 0 && strcmp((device), "A1P")              == 0 ? (dsc_config_t) DSC_CONFIG_RDKS600_A1P((mode), (w), (h), (fps), (odr)) : \
+    strcmp((platform), "RDKS600") == 0 && strcmp((device), "GS130WI_20260922") == 0 ? (dsc_config_t) DSC_CONFIG_RDKS600_GS130WI_20260922((mode), (w), (h), (fps), (odr)) : \
+    strcmp((platform), "RDKS600") == 0 && strcmp((device), "YG_U211A")         == 0 ? (dsc_config_t) DSC_CONFIG_RDKS600_YG_U211A((mode), (w), (h), (fps), (odr)) : \
     (fprintf(stderr, "unsupported platform/device: %s %s\n", (platform), (device)), exit(1), (dsc_config_t){0})
 
 #define DSC_CONFIG_RDKX5_GS130WI(mode_, width_, height_, fps_, odr_) {    \
