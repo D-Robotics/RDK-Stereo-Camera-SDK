@@ -118,27 +118,6 @@ void compose_imu_to_ref(StereoImuModel *c, const double *imu_to_left_R,
     }
 }
 
-/* The EEPROM L/R blocks are labelled opposite to the sensor order the pipeline uses for
-   the left and right outputs; moving both blocks together aligns the rectified images
-   (median vertical disparity 1.4 px -> 0.0 px).  Moving only one of them is worse, so the
-   intrinsics and the pose always move as a pair.  The reference frame is unchanged: the
-   camera that used to be the identity pose is still the identity pose, it is now reported
-   as the left camera, so imu_R / imu_T stay valid. */
-void swap_cameras(StereoImuModel *c)
-{
-    CameraIntrinsics k = c->cam_left;
-    c->cam_left  = c->cam_right;
-    c->cam_right = k;
-
-    double r[9], t[3];
-    memcpy(r, c->cam_left_R, sizeof(r));
-    memcpy(t, c->cam_left_T, sizeof(t));
-    memcpy(c->cam_left_R,  c->cam_right_R, sizeof(r));
-    memcpy(c->cam_left_T,  c->cam_right_T, sizeof(t));
-    memcpy(c->cam_right_R, r, sizeof(r));
-    memcpy(c->cam_right_T, t, sizeof(t));
-}
-
 bool probe(base::I2cDevice &bus)
 {
     // header 15B + checksum 1B
@@ -214,9 +193,6 @@ Status read(base::I2cDevice &bus, StereoImuModel *out)
     for(uint8_t i = 0; i < 3; i++)
         imu_to_left_T[i] = read_float(buf, kImuT + i * 4);
     compose_imu_to_ref(out, imu_to_left_R, imu_to_left_T);
-
-    // See swap_cameras(): the two camera blocks belong to the other eye.
-    swap_cameras(out);
 
     return Status::Ok;
 }
