@@ -37,15 +37,17 @@
 int vin_open(hbn_vnode_handle_t *vin, int mipi_rx,
              uint32_t width, uint32_t height, uint32_t fps)
 {
-    /* One frame per LPWM period.  The software trigger restarts the waveform once per
-       second, so the frame train has to end at least 10 us before that edge; a rate that
-       divides the second exactly (20, 25, 50 fps) is shortened by one microsecond until
-       it does.  The offset register then holds that leftover rest plus one, because the
-       hardware counts the delay from one. */
-    uint32_t period_us = 1000000U / fps;
-    while(1000000U - period_us * fps < 10U && period_us > 10U)
-        period_us--;
-    const uint32_t offset_us = 1000000U - period_us * fps + 1U;
+    /* LPWM frame timing.  period holds pulse_period - 1 and the offset centres the
+       1 ms high pulse inside the frame window, so the software trigger that restarts the
+       waveform once per second never coincides with a pulse edge and exactly fps pulses
+       are emitted per second. */
+    const uint32_t pulse_period_us = 1000000U / fps;
+    const uint32_t high_us = 1000U;
+    const uint32_t remainder_us = 1000000U - pulse_period_us * fps;
+    const uint32_t phase_us = remainder_us + (pulse_period_us - high_us) / 2U;
+    const uint32_t period_us = pulse_period_us - 1U;
+    const uint32_t offset_us = phase_us + 1U;
+
     /* Packed RAW10 line, then rounded up to the plane alignment the ISP checks against. */
     const uint32_t ochn_wstride =
         (((width * 10U / 8U) + DSC_VIN_WSTRIDE_ALIGN - 1U) / DSC_VIN_WSTRIDE_ALIGN)
