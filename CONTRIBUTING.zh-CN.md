@@ -59,7 +59,7 @@ make -j$(nproc)            # 库、示例、工具、Debian 包
 make lib                   # 只构建库
 
 # 运行与改动相关的部分，例如
-out/RDKX5/dsc detect eeprom -b 4 -a 0x50
+out/RDKX5/dsc detect eeprom -b 4
 out/RDKX5/dsc shell -d GS130WI
 ```
 

@@ -87,7 +87,7 @@ The Python package and the ROS 2 wrapper depend on the library and headers insta
 | --- | --- |
 | `dsc help` | Show help |
 | `dsc version` | Print the SDK version and build platform |
-| `dsc detect <target> [-b <bus...>] [-a <addr...>]` | Scan I2C buses and addresses |
+| `dsc detect <target> [-b <bus...>]` | Scan I2C buses and addresses |
 | `dsc shell` | Enter interactive debugging mode, see 3.2 |
 
 **dsc version**
@@ -101,12 +101,12 @@ Prints the SDK version and the build platform.
 **dsc detect**
 
 ```bash
-dsc detect <imu|eeprom|camera> [-b <bus...>] [-a <addr...>]
+dsc detect <imu|eeprom|camera> [-b <bus...>]
 ```
 
 - `<target>`: one of `imu`, `eeprom`, `camera`
 - `-b`: I2C buses to scan; defaults to `1 2 4 5 6`
-- `-a`: addresses to probe; defaults are imu `0x68`, eeprom `0x50`, camera `0x30 0x31 0x32 0x33`
+- Addresses are fixed per target: imu `0x68`, eeprom `0x50`, camera `0x30 0x31 0x32 0x33`
 
 Examples:
 

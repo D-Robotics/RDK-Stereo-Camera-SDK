@@ -87,7 +87,7 @@ Python 包和 ROS 2 封装依赖这里安装的库与头文件，需要先装 co
 | --- | --- |
 | `dsc help` | 显示帮助 |
 | `dsc version` | 打印 SDK 版本与编译平台 |
-| `dsc detect <目标> [-b <总线...>] [-a <地址...>]` | 扫描 I2C 总线与地址 |
+| `dsc detect <目标> [-b <总线...>]` | 扫描 I2C 总线与地址 |
 | `dsc shell` | 进入交互式调试模式，见 3.2 |
 
 **dsc version**
@@ -101,12 +101,12 @@ dsc version
 **dsc detect**
 
 ```bash
-dsc detect <imu|eeprom|camera> [-b <总线...>] [-a <地址...>]
+dsc detect <imu|eeprom|camera> [-b <总线...>]
 ```
 
 - `<目标>`：`imu`、`eeprom`、`camera` 三者之一
 - `-b`：要扫描的 I2C 总线，默认 `1 2 4 5 6`
-- `-a`：要探测的地址，默认按目标取 imu `0x68`、eeprom `0x50`、camera `0x30 0x31 0x32 0x33`
+- 地址按目标固定：imu `0x68`、eeprom `0x50`、camera `0x30 0x31 0x32 0x33`
 
 示例：
 

@@ -73,7 +73,7 @@ make -j$(nproc)            # library, samples, tools and the Debian package
 make lib                   # library only
 
 # run what your change touches, for example
-out/RDKX5/dsc detect eeprom -b 4 -a 0x50
+out/RDKX5/dsc detect eeprom -b 4
 out/RDKX5/dsc shell -d GS130WI
 ```
 
