@@ -7,7 +7,7 @@
  * result line (model name plus its details on a hit), so the output also shows
  * where an unknown device answered and where nothing answered at all.
  *
- * Usage: dstereo-cam detect imu -b <bus...> [-a <addr...>]
+ * Usage: dstereo-cam detect imu [-b <bus...>] [-a <addr...>]
  *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
@@ -56,7 +56,7 @@ static void print_block(const char *indent, const char *text)
 /**
  * @brief Probe every requested (bus, address) pair, one result line per point.
  *
- * @param[in] argc,argv @c -b <bus...> (required) and @c -a <addr...> (optional);
+ * @param[in] argc,argv @c -b <bus...> and @c -a <addr...> (both optional);
  *                      each option takes the values that follow it until the next
  *                      argument starting with '-'.
  * @return 0 when the scan completed (also when no IMU was found), 1 on a usage
@@ -75,12 +75,9 @@ int main(int argc, char **argv)
             }
         }
     }
-    if(buses.empty()){
-        fprintf(stderr, "usage: dstereo-cam detect imu -b <bus...> [-a <addr...>]   (addr default: 0x68 0x69)\n");
-        return 1;
-    }
-    // default probe addresses: the two I2C addresses an ICM-family IMU can answer on
-    if(addrs.empty())addrs = {0x68, 0x69};
+    if(buses.empty())buses = {1, 2, 4, 5, 6};
+    // default probe address: the IMU address used by the SDK presets
+    if(addrs.empty())addrs = {0x68};
 
     printf("IMU scan: buses");
     for(int b : buses)printf(" %d", b);

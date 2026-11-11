@@ -7,7 +7,7 @@
  * result line (model name plus its details on a hit), so the output also shows
  * where an unknown device answered and where nothing answered at all.
  *
- * Usage: dstereo-cam detect eeprom -b <bus...> [-a <addr...>]
+ * Usage: dstereo-cam detect eeprom [-b <bus...>] [-a <addr...>]
  *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
@@ -105,7 +105,7 @@ static void print_block(const char *indent, const char *text)
 /**
  * @brief Probe every requested (bus, address) pair, one result line per point.
  *
- * @param[in] argc,argv @c -b <bus...> (required) and @c -a <addr...> (optional);
+ * @param[in] argc,argv @c -b <bus...> and @c -a <addr...> (both optional);
  *                      each option takes the values that follow it until the next
  *                      argument starting with '-'.
  * @return 0 when the scan completed (also when no EEPROM was found), 1 on a usage
@@ -124,10 +124,7 @@ int main(int argc, char **argv)
             }
         }
     }
-    if(buses.empty()){
-        fprintf(stderr, "usage: dstereo-cam detect eeprom -b <bus...> [-a <addr...>]   (addr default: 0x50)\n");
-        return 1;
-    }
+    if(buses.empty())buses = {1, 2, 4, 5, 6};
     // default probe address: the calibration EEPROM address used by the SDK presets
     if(addrs.empty())addrs = {0x50};
 

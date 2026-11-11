@@ -7,7 +7,7 @@
  * result line (the chip id on a hit), so the output also shows where nothing
  * answered or where the bus itself could not be opened.
  *
- * Usage: dstereo-cam detect camera -b <bus...> [-a <addr...>]
+ * Usage: dstereo-cam detect camera [-b <bus...>] [-a <addr...>]
  *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
@@ -47,7 +47,7 @@ static bool parse_int(const char *s, int *out)
 /**
  * @brief Probe every requested (bus, address) pair, one result line per point.
  *
- * @param[in] argc,argv @c -b <bus...> (required) and @c -a <addr...> (optional);
+ * @param[in] argc,argv @c -b <bus...> and @c -a <addr...> (both optional);
  *                      each option takes the values that follow it until the next
  *                      argument starting with '-'.
  * @return 0 when the scan completed (also when no sensor was found), 1 on a usage
@@ -66,12 +66,9 @@ int main(int argc, char **argv)
             }
         }
     }
-    if(buses.empty()){
-        fprintf(stderr, "usage: dstereo-cam detect camera -b <bus...> [-a <addr...>]   (addr default: 0x30 0x32)\n");
-        return 1;
-    }
-    // default probe addresses: the left/right sensor addresses used by the SDK presets
-    if(addrs.empty())addrs = {0x30, 0x32};
+    if(buses.empty())buses = {1, 2, 4, 5, 6};
+    // default probe addresses cover every SC132GS address used by the SDK presets
+    if(addrs.empty())addrs = {0x30, 0x31, 0x32, 0x33};
 
     printf("CAMERA scan: buses");
     for(int b : buses)printf(" %d", b);
