@@ -31,7 +31,7 @@
     strcmp((platform), "RDKX5") == 0 && strcmp((device), "GS130WI_20260922")            == 0 ? (dsc_config_t) DSC_CONFIG_RDKX5_GS130WI_20260922((mode), (w), (h), (fps), (odr)) : \
     strcmp((platform), "RDKX5") == 0 && strcmp((device), "GS130W")             == 0 ? (dsc_config_t) DSC_CONFIG_RDKX5_GS130W((mode), (w), (h), (fps), (odr))  : \
     strcmp((platform), "RDKX5") == 0 && strcmp((device), "YG_U211A")           == 0 ? (dsc_config_t) DSC_CONFIG_RDKX5_YG_U211A((mode), (w), (h), (fps), (odr)) : \
-    strcmp((platform), "RDKX5") == 0 && strcmp((device), "RDK_Stereo_A1P")   == 0 ? (dsc_config_t) DSC_CONFIG_RDKX5_A1P((mode), (w), (h), (fps), (odr)) : \
+    strcmp((platform), "RDKX5") == 0 && strcmp((device), "A1P")   == 0 ? (dsc_config_t) DSC_CONFIG_A1P((mode), (w), (h), (fps), (odr)) : \
     strcmp((platform), "RDKS100") == 0 && strcmp((device), "GS130WI")          == 0 ? (dsc_config_t) DSC_CONFIG_RDKS100_GS130WI((mode), (w), (h), (fps), (odr)) : \
     strcmp((platform), "RDKS100") == 0 && strcmp((device), "GS130WI_20260922")          == 0 ? (dsc_config_t) DSC_CONFIG_RDKS100_GS130WI_20260922((mode), (w), (h), (fps), (odr)) : \
     strcmp((platform), "RDKS100") == 0 && strcmp((device), "GS130W")           == 0 ? (dsc_config_t) DSC_CONFIG_RDKS100_GS130W((mode), (w), (h), (fps), (odr))  : \
@@ -111,9 +111,9 @@
     .eeprom_config = { .bus = {4, 6}, .bus_num = 2, .addr = 0x50 },         \
     .camera_fifo = { .depth = 4,    .mode = DSC_FIFO_DROP_OLD },          \
 }
-/* RDK_Stereo_A1P: SC132GS stereo pair, 70 mm baseline, IMU (ICM-42607) with its
+/* A1P: SC132GS stereo pair, 70 mm baseline, IMU (ICM-42607) with its
    F-SYNC input wired to the right eye. */
-#define DSC_CONFIG_RDKX5_A1P(mode_, width_, height_, fps_, odr_) {         \
+#define DSC_CONFIG_A1P(mode_, width_, height_, fps_, odr_) {         \
     .camera_config = {                                                      \
         .bus = {4, 6}, .bus_num = 2,                                        \
         .left_addr = 0x30, .right_addr = 0x32,                              \

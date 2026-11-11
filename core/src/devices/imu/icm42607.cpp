@@ -1,6 +1,6 @@
 /**
  * @file icm42607.cpp
- * @brief ICM-42607-C implementation (the part fitted to RDK_Stereo_A1P).
+ * @brief ICM-42607-C implementation (the part fitted to A1P).
  *
  * The register map differs from the ICM-42688-P one in icm42688.cpp, so the two models do
  * not share code.  Two differences matter here:
