@@ -36,9 +36,15 @@
     strcmp((platform), "RDKS100") == 0 && strcmp((device), "GS130WI")          == 0 ? (dsc_config_t) DSC_CONFIG_RDKS100_GS130WI((mode), (w), (h), (fps), (odr)) : \
     strcmp((platform), "RDKS100") == 0 && strcmp((device), "GS130WI_20260922")          == 0 ? (dsc_config_t) DSC_CONFIG_RDKS100_GS130WI_20260922((mode), (w), (h), (fps), (odr)) : \
     strcmp((platform), "RDKS100") == 0 && strcmp((device), "GS130W")           == 0 ? (dsc_config_t) DSC_CONFIG_RDKS100_GS130W((mode), (w), (h), (fps), (odr))  : \
+    strcmp((platform), "RDKS100") == 0 && strcmp((device), "YG_U211A")         == 0 ? (dsc_config_t) DSC_CONFIG_RDKS100_YG_U211A((mode), (w), (h), (fps), (odr)) : \
+    strcmp((platform), "RDKS100") == 0 && strcmp((device), "A1P")              == 0 ? (dsc_config_t) DSC_CONFIG_RDKS100_A1P((mode), (w), (h), (fps), (odr)) : \
+    strcmp((platform), "RDKS100") == 0 && strcmp((device), "A1")               == 0 ? (dsc_config_t) DSC_CONFIG_RDKS100_A1((mode), (w), (h), (fps), (odr)) : \
     strcmp((platform), "RDKS600") == 0 && strcmp((device), "GS130WI")          == 0 ? (dsc_config_t) DSC_CONFIG_RDKS600_GS130WI((mode), (w), (h), (fps), (odr)) : \
     strcmp((platform), "RDKS600") == 0 && strcmp((device), "GS130WI_20260922")          == 0 ? (dsc_config_t) DSC_CONFIG_RDKS600_GS130WI_20260922((mode), (w), (h), (fps), (odr)) : \
     strcmp((platform), "RDKS600") == 0 && strcmp((device), "GS130W")           == 0 ? (dsc_config_t) DSC_CONFIG_RDKS600_GS130W((mode), (w), (h), (fps), (odr))  : \
+    strcmp((platform), "RDKS600") == 0 && strcmp((device), "YG_U211A")         == 0 ? (dsc_config_t) DSC_CONFIG_RDKS600_YG_U211A((mode), (w), (h), (fps), (odr)) : \
+    strcmp((platform), "RDKS600") == 0 && strcmp((device), "A1P")              == 0 ? (dsc_config_t) DSC_CONFIG_RDKS600_A1P((mode), (w), (h), (fps), (odr)) : \
+    strcmp((platform), "RDKS600") == 0 && strcmp((device), "A1")               == 0 ? (dsc_config_t) DSC_CONFIG_RDKS600_A1((mode), (w), (h), (fps), (odr)) : \
     (fprintf(stderr, "unsupported platform/device: %s %s\n", (platform), (device)), exit(1), (dsc_config_t){0})
 
 #define DSC_CONFIG_RDKX5_GS130WI(mode_, width_, height_, fps_, odr_) {    \
@@ -328,6 +334,152 @@
         .accel_bw_sel = 0, .gyro_bw_sel = 0,                                \
     },                                                                      \
     .eeprom_config = { .bus = {4, 5}, .bus_num = 2, .addr = 0x50 },         \
+    .camera_fifo = { .depth = 4,    .mode = DSC_FIFO_DROP_OLD },          \
+}
+
+/* YG_U211A on RDKS100: same bus/MIPI mapping as GS130W, no IMU. */
+#define DSC_CONFIG_RDKS100_YG_U211A(mode_, width_, height_, fps_, odr_) { \
+    .camera_config = {                                                      \
+        .bus = {1, 2}, .bus_num = 2,                                        \
+        .left_addr = 0x33, .right_addr = 0x32,                              \
+        .sensor_width = 1088, .sensor_height = 1280,                        \
+        .fps = (fps_), .line_length = 1400, .frame_length = 1500,           \
+        .tuning_file = "lib_sc132gs_linear.so",                             \
+        .output_width = (width_), .output_height = (height_),               \
+        .mode = (mode_),                                                    \
+        .stereo_layout = DSC_STEREO_LAYOUT_NONE,                          \
+        .bus_mipi_rx    = { [0] = 0xFF, [1] = 0, [2] = 1, [3 ... 31] = 0xFF }, \
+        .bus_reset_gpio = { [0 ... 31] = -1 },                              \
+        .fsync_camera = DSC_CAMERA_RIGHT_IDX,                             \
+    },                                                                      \
+    .imu_config = {                                                         \
+        .bus_num = 0, .addr = 0x68,                                         \
+        .odr_hz = (odr_), .accel_fsr_g = 16, .gyro_fsr_dps = 2000,          \
+        .accel_bw_sel = 0, .gyro_bw_sel = 0,                                \
+    },                                                                      \
+    .eeprom_config = { .bus = {1, 2}, .bus_num = 2, .addr = 0x50 },         \
+    .camera_fifo = { .depth = 4,    .mode = DSC_FIFO_DROP_OLD },          \
+}
+
+/* A1P on RDKS100: SC132GS stereo pair with the ICM-42607 IMU on bus 2. */
+#define DSC_CONFIG_RDKS100_A1P(mode_, width_, height_, fps_, odr_) {      \
+    .camera_config = {                                                      \
+        .bus = {1, 2}, .bus_num = 2,                                        \
+        .left_addr = 0x30, .right_addr = 0x32,                              \
+        .sensor_width = 1088, .sensor_height = 1280,                        \
+        .fps = (fps_), .line_length = 1400, .frame_length = 1500,           \
+        .tuning_file = "lib_sc132gs_linear.so",                             \
+        .output_width = (width_), .output_height = (height_),               \
+        .mode = (mode_),                                                    \
+        .stereo_layout = DSC_STEREO_LAYOUT_NONE,                          \
+        .bus_mipi_rx    = { [0] = 0xFF, [1] = 0, [2] = 1, [3 ... 31] = 0xFF }, \
+        .bus_reset_gpio = { [0 ... 31] = -1 },                              \
+        .fsync_camera = DSC_CAMERA_RIGHT_IDX,                             \
+    },                                                                      \
+    .imu_config = {                                                         \
+        .bus = {2}, .bus_num = 1, .addr = 0x68,                             \
+        .odr_hz = (odr_), .accel_fsr_g = 16, .gyro_fsr_dps = 2000,          \
+        .accel_bw_sel = 0, .gyro_bw_sel = 0,                                \
+    },                                                                      \
+    .eeprom_config = { .bus = {2}, .bus_num = 1, .addr = 0x50 },            \
+    .camera_fifo = { .depth = 4,    .mode = DSC_FIFO_DROP_OLD },          \
+    .imu_fifo    = { .depth = 1024, .mode = DSC_FIFO_DROP_OLD },          \
+}
+
+/* A1 on RDKS100: A1P without the IMU. */
+#define DSC_CONFIG_RDKS100_A1(mode_, width_, height_, fps_, odr_) {       \
+    .camera_config = {                                                      \
+        .bus = {1, 2}, .bus_num = 2,                                        \
+        .left_addr = 0x30, .right_addr = 0x32,                              \
+        .sensor_width = 1088, .sensor_height = 1280,                        \
+        .fps = (fps_), .line_length = 1400, .frame_length = 1500,           \
+        .tuning_file = "lib_sc132gs_linear.so",                             \
+        .output_width = (width_), .output_height = (height_),               \
+        .mode = (mode_),                                                    \
+        .stereo_layout = DSC_STEREO_LAYOUT_NONE,                          \
+        .bus_mipi_rx    = { [0] = 0xFF, [1] = 0, [2] = 1, [3 ... 31] = 0xFF }, \
+        .bus_reset_gpio = { [0 ... 31] = -1 },                              \
+        .fsync_camera = DSC_CAMERA_RIGHT_IDX,                             \
+    },                                                                      \
+    .imu_config = {                                                         \
+        .bus_num = 0, .addr = 0x68,                                         \
+        .odr_hz = (odr_), .accel_fsr_g = 16, .gyro_fsr_dps = 2000,          \
+        .accel_bw_sel = 0, .gyro_bw_sel = 0,                                \
+    },                                                                      \
+    .eeprom_config = { .bus = {2}, .bus_num = 1, .addr = 0x50 },            \
+    .camera_fifo = { .depth = 4,    .mode = DSC_FIFO_DROP_OLD },          \
+}
+
+/* YG_U211A on RDKS600: same bus/MIPI/reset mapping as GS130W, no IMU. */
+#define DSC_CONFIG_RDKS600_YG_U211A(mode_, width_, height_, fps_, odr_) { \
+    .camera_config = {                                                      \
+        .bus = {4, 5}, .bus_num = 2,                                        \
+        .left_addr = 0x33, .right_addr = 0x32,                              \
+        .sensor_width = 1088, .sensor_height = 1280,                        \
+        .fps = (fps_), .line_length = 1400, .frame_length = 1500,           \
+        .tuning_file = "lib_sc132gs_linear.so",                             \
+        .output_width = (width_), .output_height = (height_),               \
+        .mode = (mode_),                                                    \
+        .stereo_layout = DSC_STEREO_LAYOUT_NONE,                          \
+        .bus_mipi_rx    = { [0 ... 3] = 0xFF, [4] = 4, [5] = 5, [6 ... 31] = 0xFF }, \
+        .bus_reset_gpio = { [0 ... 3] = -1, [4] = 411, [5] = 412, [6 ... 31] = -1 }, \
+        .fsync_camera = DSC_CAMERA_RIGHT_IDX,                             \
+    },                                                                      \
+    .imu_config = {                                                         \
+        .bus_num = 0, .addr = 0x68,                                         \
+        .odr_hz = (odr_), .accel_fsr_g = 16, .gyro_fsr_dps = 2000,          \
+        .accel_bw_sel = 0, .gyro_bw_sel = 0,                                \
+    },                                                                      \
+    .eeprom_config = { .bus = {4, 5}, .bus_num = 2, .addr = 0x50 },         \
+    .camera_fifo = { .depth = 4,    .mode = DSC_FIFO_DROP_OLD },          \
+}
+
+/* A1P on RDKS600: SC132GS stereo pair with the ICM-42607 IMU on bus 5. */
+#define DSC_CONFIG_RDKS600_A1P(mode_, width_, height_, fps_, odr_) {      \
+    .camera_config = {                                                      \
+        .bus = {4, 5}, .bus_num = 2,                                        \
+        .left_addr = 0x30, .right_addr = 0x32,                              \
+        .sensor_width = 1088, .sensor_height = 1280,                        \
+        .fps = (fps_), .line_length = 1400, .frame_length = 1500,           \
+        .tuning_file = "lib_sc132gs_linear.so",                             \
+        .output_width = (width_), .output_height = (height_),               \
+        .mode = (mode_),                                                    \
+        .stereo_layout = DSC_STEREO_LAYOUT_NONE,                          \
+        .bus_mipi_rx    = { [0 ... 3] = 0xFF, [4] = 4, [5] = 5, [6 ... 31] = 0xFF }, \
+        .bus_reset_gpio = { [0 ... 3] = -1, [4] = 411, [5] = 412, [6 ... 31] = -1 }, \
+        .fsync_camera = DSC_CAMERA_RIGHT_IDX,                             \
+    },                                                                      \
+    .imu_config = {                                                         \
+        .bus = {5}, .bus_num = 1, .addr = 0x68,                             \
+        .odr_hz = (odr_), .accel_fsr_g = 16, .gyro_fsr_dps = 2000,          \
+        .accel_bw_sel = 0, .gyro_bw_sel = 0,                                \
+    },                                                                      \
+    .eeprom_config = { .bus = {5}, .bus_num = 1, .addr = 0x50 },            \
+    .camera_fifo = { .depth = 4,    .mode = DSC_FIFO_DROP_OLD },          \
+    .imu_fifo    = { .depth = 1024, .mode = DSC_FIFO_DROP_OLD },          \
+}
+
+/* A1 on RDKS600: A1P without the IMU. */
+#define DSC_CONFIG_RDKS600_A1(mode_, width_, height_, fps_, odr_) {       \
+    .camera_config = {                                                      \
+        .bus = {4, 5}, .bus_num = 2,                                        \
+        .left_addr = 0x30, .right_addr = 0x32,                              \
+        .sensor_width = 1088, .sensor_height = 1280,                        \
+        .fps = (fps_), .line_length = 1400, .frame_length = 1500,           \
+        .tuning_file = "lib_sc132gs_linear.so",                             \
+        .output_width = (width_), .output_height = (height_),               \
+        .mode = (mode_),                                                    \
+        .stereo_layout = DSC_STEREO_LAYOUT_NONE,                          \
+        .bus_mipi_rx    = { [0 ... 3] = 0xFF, [4] = 4, [5] = 5, [6 ... 31] = 0xFF }, \
+        .bus_reset_gpio = { [0 ... 3] = -1, [4] = 411, [5] = 412, [6 ... 31] = -1 }, \
+        .fsync_camera = DSC_CAMERA_RIGHT_IDX,                             \
+    },                                                                      \
+    .imu_config = {                                                         \
+        .bus_num = 0, .addr = 0x68,                                         \
+        .odr_hz = (odr_), .accel_fsr_g = 16, .gyro_fsr_dps = 2000,          \
+        .accel_bw_sel = 0, .gyro_bw_sel = 0,                                \
+    },                                                                      \
+    .eeprom_config = { .bus = {5}, .bus_num = 1, .addr = 0x50 },            \
     .camera_fifo = { .depth = 4,    .mode = DSC_FIFO_DROP_OLD },          \
 }
 
