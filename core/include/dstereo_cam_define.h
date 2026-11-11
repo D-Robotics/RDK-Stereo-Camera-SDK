@@ -32,6 +32,7 @@
     strcmp((platform), "RDKX5") == 0 && strcmp((device), "GS130W")             == 0 ? (dsc_config_t) DSC_CONFIG_RDKX5_GS130W((mode), (w), (h), (fps), (odr))  : \
     strcmp((platform), "RDKX5") == 0 && strcmp((device), "YG_U211A")           == 0 ? (dsc_config_t) DSC_CONFIG_RDKX5_YG_U211A((mode), (w), (h), (fps), (odr)) : \
     strcmp((platform), "RDKX5") == 0 && strcmp((device), "A1P")   == 0 ? (dsc_config_t) DSC_CONFIG_A1P((mode), (w), (h), (fps), (odr)) : \
+    strcmp((platform), "RDKX5") == 0 && strcmp((device), "A1")    == 0 ? (dsc_config_t) DSC_CONFIG_A1((mode), (w), (h), (fps), (odr)) : \
     strcmp((platform), "RDKS100") == 0 && strcmp((device), "GS130WI")          == 0 ? (dsc_config_t) DSC_CONFIG_RDKS100_GS130WI((mode), (w), (h), (fps), (odr)) : \
     strcmp((platform), "RDKS100") == 0 && strcmp((device), "GS130WI_20260922")          == 0 ? (dsc_config_t) DSC_CONFIG_RDKS100_GS130WI_20260922((mode), (w), (h), (fps), (odr)) : \
     strcmp((platform), "RDKS100") == 0 && strcmp((device), "GS130W")           == 0 ? (dsc_config_t) DSC_CONFIG_RDKS100_GS130W((mode), (w), (h), (fps), (odr))  : \
@@ -111,6 +112,31 @@
     .eeprom_config = { .bus = {4, 6}, .bus_num = 2, .addr = 0x50 },         \
     .camera_fifo = { .depth = 4,    .mode = DSC_FIFO_DROP_OLD },          \
 }
+/* A1: the same SC132GS stereo pair as the A1P without the IMU, so the pipeline
+   starts streaming directly instead of waiting for the F-SYNC handshake. */
+#define DSC_CONFIG_A1(mode_, width_, height_, fps_, odr_) {                 \
+    .camera_config = {                                                      \
+        .bus = {4, 6}, .bus_num = 2,                                        \
+        .left_addr = 0x30, .right_addr = 0x32,                              \
+        .sensor_width = 1088, .sensor_height = 1280,                        \
+        .fps = (fps_), .line_length = 1400, .frame_length = 1500,           \
+        .tuning_file = NULL,                                                \
+        .output_width = (width_), .output_height = (height_),               \
+        .mode = (mode_),                                                    \
+        .stereo_layout = DSC_STEREO_LAYOUT_NONE,                          \
+        .bus_mipi_rx    = { [0 ... 3] = 0xFF, [4] = 2, [5] = 0xFF, [6] = 0, [7 ... 31] = 0xFF }, \
+        .bus_reset_gpio = { [0 ... 3] = -1, [4] = 351, [5] = -1, [6] = 353, [7 ... 31] = -1 },   \
+        .fsync_camera = DSC_CAMERA_RIGHT_IDX,                             \
+    },                                                                      \
+    .imu_config = {                                                         \
+        .bus_num = 0, .addr = 0x68,                                         \
+        .odr_hz = (odr_), .accel_fsr_g = 16, .gyro_fsr_dps = 2000,          \
+        .accel_bw_sel = 0, .gyro_bw_sel = 0,                                \
+    },                                                                      \
+    .eeprom_config = { .bus = {4, 6}, .bus_num = 2, .addr = 0x50 },         \
+    .camera_fifo = { .depth = 4,    .mode = DSC_FIFO_DROP_OLD },          \
+}
+
 /* A1P: SC132GS stereo pair, 70 mm baseline, IMU (ICM-42607) with its
    F-SYNC input wired to the right eye. */
 #define DSC_CONFIG_A1P(mode_, width_, height_, fps_, odr_) {         \
