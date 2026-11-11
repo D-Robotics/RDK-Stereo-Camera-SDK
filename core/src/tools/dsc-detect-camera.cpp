@@ -7,7 +7,7 @@
  * result line (the chip id on a hit), so the output also shows where nothing
  * answered or where the bus itself could not be opened.
  *
- * Usage: dstereo-cam detect camera -b <bus...> [-a <addr...>]
+ * Usage: dstereo-cam detect camera [-b <bus...>]
  *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
@@ -47,31 +47,27 @@ static bool parse_int(const char *s, int *out)
 /**
  * @brief Probe every requested (bus, address) pair, one result line per point.
  *
- * @param[in] argc,argv @c -b <bus...> (required) and @c -a <addr...> (optional);
- *                      each option takes the values that follow it until the next
- *                      argument starting with '-'.
+ * @param[in] argc,argv Optional @c -b <bus...>; the addresses are fixed to the
+ *                      SC132GS addresses used by the SDK presets.
  * @return 0 when the scan completed (also when no sensor was found), 1 on a usage
  *         or argument error.
  */
 int main(int argc, char **argv)
 {
-    std::vector<int> buses, addrs;
+    std::vector<int> buses;
+    const std::vector<int> addrs = {0x30, 0x31, 0x32, 0x33};
     for(int i = 1; i < argc; i++){
-        if(!strcmp(argv[i], "-b") || !strcmp(argv[i], "-a")){
-            std::vector<int> &dst = (argv[i][1] == 'b') ? buses : addrs;
-            while(i + 1 < argc && argv[i+1][0] != '-'){
-                int v;
-                if(!parse_int(argv[++i], &v)){ fprintf(stderr, "bad number: %s\n", argv[i]); return 1; }
-                dst.push_back(v);
-            }
+        if(strcmp(argv[i], "-b")){
+            fprintf(stderr, "unknown option: %s\n", argv[i]);
+            return 1;
+        }
+        while(i + 1 < argc && argv[i+1][0] != '-'){
+            int v;
+            if(!parse_int(argv[++i], &v)){ fprintf(stderr, "bad number: %s\n", argv[i]); return 1; }
+            buses.push_back(v);
         }
     }
-    if(buses.empty()){
-        fprintf(stderr, "usage: dstereo-cam detect camera -b <bus...> [-a <addr...>]   (addr default: 0x30 0x32)\n");
-        return 1;
-    }
-    // default probe addresses: the left/right sensor addresses used by the SDK presets
-    if(addrs.empty())addrs = {0x30, 0x32};
+    if(buses.empty())buses = {1, 2, 4, 5, 6};
 
     printf("CAMERA scan: buses");
     for(int b : buses)printf(" %d", b);

@@ -13,7 +13,12 @@
 | 型号 | 说明 | RDK X5 | RDK S100 | RDK S600 |
 | --- | --- | --- | --- | --- |
 | GS130W | 双 SC132GS，无 IMU，横屏 1280×1088，80 mm 基线 | 支持 | 支持 | 支持 |
-| GS130WI | 双 SC132GS，搭载 IMU 型号为 ICM42688-P，竖屏 1088×1280，70 mm 基线 | 支持 | 支持 | 支持 |
+| GS130WI | 双 SC132GS，IMU 型号为 ICM42688-P，竖屏 1088×1280，70 mm 基线 | 支持 | 支持 | 支持 |
+| A1 | 无 IMU 的 A1P | 支持 | 预设 | 预设 |
+| A1P | 双 SC132GS，IMU 型号为 ICM-42607-C，竖屏 1088×1280，70 mm 基线 | 支持 | 预设 | 预设 |
+
+**支持**表示该型号已在对应平台完成构建和运行；**预设**表示总线、MIPI、复位和
+IMU 配置已提供，但尚未完成实机验证。上表列出主要相机型号。
 
 ## 2 构建与安装
 
@@ -87,7 +92,7 @@ Python 包和 ROS 2 封装依赖这里安装的库与头文件，需要先装 co
 | --- | --- |
 | `dsc help` | 显示帮助 |
 | `dsc version` | 打印 SDK 版本与编译平台 |
-| `dsc detect <目标> -b <总线...> [-a <地址...>]` | 扫描 I2C 总线与地址 |
+| `dsc detect <目标> [-b <总线...>]` | 扫描 I2C 总线与地址 |
 | `dsc shell` | 进入交互式调试模式，见 3.2 |
 
 **dsc version**
@@ -101,17 +106,17 @@ dsc version
 **dsc detect**
 
 ```bash
-dsc detect <imu|eeprom|camera> -b <总线...> [-a <地址...>]
+dsc detect <imu|eeprom|camera> [-b <总线...>]
 ```
 
 - `<目标>`：`imu`、`eeprom`、`camera` 三者之一
-- `-b`：要扫描的 I2C 总线，必填，例如 `-b 4 6`
-- `-a`：要探测的地址，默认按目标取 imu `0x68 0x69`、eeprom `0x50`、camera `0x30 0x32`
+- `-b`：要扫描的 I2C 总线，默认 `1 2 4 5 6`
+- 地址按目标固定：imu `0x68`、eeprom `0x50`、camera `0x30 0x31 0x32 0x33`
 
 示例：
 
 ```bash
-dsc detect camera -b 4 6
+dsc detect camera
 dsc detect eeprom -b 4 6
 ```
 
@@ -127,7 +132,7 @@ dsc detect eeprom -b 4 6
 dsc shell -d GS130WI [-m rect] [-w 1088] [-h 1280] [-f 30] [-o 200]
 ```
 
-- `-d <型号>`：设备型号，必填，可选 `GS130W` 或 `GS130WI`
+- `-d <型号>`：设备型号，必填，可选 `GS130W`、`GS130WI`、`A1` 或 `A1P`
 - `-m <出图模式>`：出图类型，默认 `rect`
   - `raw`：原始画面，不做畸变矫正
   - `resize`：居中裁剪并缩放后的画面，保持宽高比

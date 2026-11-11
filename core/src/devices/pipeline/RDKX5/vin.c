@@ -22,7 +22,16 @@
 int vin_open(hbn_vnode_handle_t *vin, int mipi_rx,
              uint32_t width, uint32_t height, uint32_t fps)
 {
-    const uint32_t period_us = 1000000U / fps;   /* LPWM period = one frame, in us */
+    /* LPWM frame timing.  period holds pulse_period - 1 and the offset centres the
+       1 ms high pulse inside the frame window, so the software trigger that restarts the
+       waveform once per second never coincides with a pulse edge and exactly fps pulses
+       are emitted per second. */
+    const uint32_t pulse_period_us = 1000000U / fps;
+    const uint32_t high_us = 1000U;
+    const uint32_t remainder_us = 1000000U - pulse_period_us * fps;
+    const uint32_t phase_us = remainder_us + (pulse_period_us - high_us) / 2U;
+    const uint32_t period_us = pulse_period_us - 1U;
+    const uint32_t offset_us = phase_us + 1U;
 
     vin_node_attr_t node = {
         .cim_attr = {
@@ -45,13 +54,13 @@ int vin_open(hbn_vnode_handle_t *vin, int mipi_rx,
             .enable = 1,
             .lpwm_chn_attr = {
                 [0] = { .trigger_source = 0, .trigger_mode = 0, .period = period_us,
-                        .offset = 10, .duty_time = 1000, .threshold = 0, .adjust_step = 0 },
+                        .offset = offset_us, .duty_time = 999, .threshold = 0, .adjust_step = 0 },
                 [1] = { .trigger_source = 0, .trigger_mode = 0, .period = period_us,
-                        .offset = 10, .duty_time = 1000, .threshold = 0, .adjust_step = 0 },
+                        .offset = offset_us, .duty_time = 999, .threshold = 0, .adjust_step = 0 },
                 [2] = { .trigger_source = 0, .trigger_mode = 0, .period = period_us,
-                        .offset = 10, .duty_time = 1000, .threshold = 0, .adjust_step = 0 },
+                        .offset = offset_us, .duty_time = 999, .threshold = 0, .adjust_step = 0 },
                 [3] = { .trigger_source = 0, .trigger_mode = 0, .period = period_us,
-                        .offset = 10, .duty_time = 1000, .threshold = 0, .adjust_step = 0 },
+                        .offset = offset_us, .duty_time = 999, .threshold = 0, .adjust_step = 0 },
             },
         },
     };

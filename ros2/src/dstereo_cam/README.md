@@ -15,6 +15,21 @@
 | Platform | RDK X5, RDK S100, RDK S600 |
 | Requires | ROS 2 Humble or Jazzy, `libdstereocam.so` |
 
+## Model Presets
+
+The node expands the C preset selected by `device`; there is no separate ROS preset table.
+The main camera models are listed below.
+
+| Model | IMU | RDK X5 | RDK S100 | RDK S600 |
+| --- | --- | --- | --- | --- |
+| GS130W | No | Supported | Supported | Supported |
+| GS130WI | Yes | Supported | Supported | Supported |
+| A1 | No | Supported | Preset | Preset |
+| A1P | Yes, ICM-42607-C | Supported | Preset | Preset |
+
+**Supported** means built and run on that platform; **Preset** means the configuration is
+available but hardware validation is pending.
+
 ## Dependencies
 
 - **Hardware**: an RDK series development board with a stereo camera (some models include an IMU). Currently supported: **RDK X5**, **RDK S100** and **RDK S600**.
@@ -103,7 +118,7 @@ Either way the node also publishes:
 
 | Parameter | Default | Meaning |
 | --- | --- | --- |
-| `device` | `GS130WI` | Camera model: `GS130WI` or `GS130W` |
+| `device` | `GS130WI` | Camera model: `GS130W`, `GS130WI`, `A1` or `A1P` |
 | `camera_mode` | `rect` | `raw` / `resize` / `rect` |
 | `stitch` | `none` | `none` / `left_right` / `right_left` / `top_bottom` / `bottom_top` |
 | `output_width` | `544` | Output width of one eye, in pixels |

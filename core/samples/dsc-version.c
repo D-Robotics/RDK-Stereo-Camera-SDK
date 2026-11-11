@@ -10,7 +10,7 @@
  *
  * output: a single line on stdout, exactly as main() prints it:
  *
- *   dsc_sdk <version> (platform: <platform>)
+ *   dstereo_cam <version> (platform: <platform>)
  *
  *   <version>  the version string baked into the library at build time
  *              (-DDSC_VERSION, read by the Makefile from the VERSION file one
@@ -28,6 +28,6 @@
 
 int main(void)
 {
-    printf("dsc_sdk %s (platform: %s)\n", dsc_version(), dsc_platform());
+    printf("dstereo_cam %s (platform: %s)\n", dsc_version(), dsc_platform());
     return 0;
 }

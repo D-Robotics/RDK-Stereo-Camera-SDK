@@ -15,6 +15,19 @@
 | 平台 | RDK X5、RDK S100、RDK S600 |
 | 依赖 | ROS 2 Humble 或 Jazzy、`libdstereocam.so` |
 
+## 型号预设
+
+节点直接展开 `device` 选择的 C 预设，不单独维护 ROS 预设表，主要型号如下。
+
+| 型号 | IMU | RDK X5 | RDK S100 | RDK S600 |
+| --- | --- | --- | --- | --- |
+| GS130W | 无 | 支持 | 支持 | 支持 |
+| GS130WI | 有 | 支持 | 支持 | 支持 |
+| A1 | 无 | 支持 | 预设 | 预设 |
+| A1P | 有，ICM-42607-C | 支持 | 预设 | 预设 |
+
+**支持**表示已在对应平台完成构建和运行；**预设**表示配置已提供，但尚未完成实机验证。
+
 ## 依赖
 
 - **硬件**：一块 RDK 系列开发板与一个双目相机（部分型号带 IMU）。当前支持 **RDK X5**、**RDK S100**、**RDK S600**。
@@ -103,7 +116,7 @@ ros2 launch dstereo_cam dstereo_cam.launch.py
 
 | 参数 | 默认值 | 含义 |
 | --- | --- | --- |
-| `device` | `GS130WI` | 相机型号：`GS130WI` 或 `GS130W` |
+| `device` | `GS130WI` | 相机型号：`GS130W`、`GS130WI`、`A1` 或 `A1P` |
 | `camera_mode` | `rect` | `raw` / `resize` / `rect` |
 | `stitch` | `none` | `none` / `left_right` / `right_left` / `top_bottom` / `bottom_top` |
 | `output_width` | `544` | 单目输出宽度，单位像素 |

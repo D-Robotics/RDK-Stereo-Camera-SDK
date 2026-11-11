@@ -16,6 +16,20 @@
 | Typing | ships `py.typed` and `__init__.pyi` |
 | Platform | RDK X5, RDK S100, RDK S600 |
 
+## Model Presets
+
+`preset()` mirrors the C presets for the main camera models below.
+
+| Model | IMU | RDK X5 | RDK S100 | RDK S600 |
+| --- | --- | --- | --- | --- |
+| GS130W | No | Supported | Supported | Supported |
+| GS130WI | Yes | Supported | Supported | Supported |
+| A1 | No | Supported | Preset | Preset |
+| A1P | Yes, ICM-42607-C | Supported | Preset | Preset |
+
+**Supported** means built and run on that platform; **Preset** means the configuration is
+available but hardware validation is pending.
+
 ## Requirements
 
 - Python 3.10 or newer, and `numpy` (>= 1.20).

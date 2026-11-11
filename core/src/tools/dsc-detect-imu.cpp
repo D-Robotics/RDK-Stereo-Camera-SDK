@@ -7,7 +7,7 @@
  * result line (model name plus its details on a hit), so the output also shows
  * where an unknown device answered and where nothing answered at all.
  *
- * Usage: dstereo-cam detect imu -b <bus...> [-a <addr...>]
+ * Usage: dstereo-cam detect imu [-b <bus...>]
  *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
@@ -56,31 +56,26 @@ static void print_block(const char *indent, const char *text)
 /**
  * @brief Probe every requested (bus, address) pair, one result line per point.
  *
- * @param[in] argc,argv @c -b <bus...> (required) and @c -a <addr...> (optional);
- *                      each option takes the values that follow it until the next
- *                      argument starting with '-'.
+ * @param[in] argc,argv Optional @c -b <bus...>; the address is fixed to 0x68.
  * @return 0 when the scan completed (also when no IMU was found), 1 on a usage
  *         or argument error.
  */
 int main(int argc, char **argv)
 {
-    std::vector<int> buses, addrs;
+    std::vector<int> buses;
+    const std::vector<int> addrs = {0x68};
     for(int i = 1; i < argc; i++){
-        if(!strcmp(argv[i], "-b") || !strcmp(argv[i], "-a")){
-            std::vector<int> &dst = (argv[i][1] == 'b') ? buses : addrs;
-            while(i + 1 < argc && argv[i+1][0] != '-'){
-                int v;
-                if(!parse_int(argv[++i], &v)){ fprintf(stderr, "bad number: %s\n", argv[i]); return 1; }
-                dst.push_back(v);
-            }
+        if(strcmp(argv[i], "-b")){
+            fprintf(stderr, "unknown option: %s\n", argv[i]);
+            return 1;
+        }
+        while(i + 1 < argc && argv[i+1][0] != '-'){
+            int v;
+            if(!parse_int(argv[++i], &v)){ fprintf(stderr, "bad number: %s\n", argv[i]); return 1; }
+            buses.push_back(v);
         }
     }
-    if(buses.empty()){
-        fprintf(stderr, "usage: dstereo-cam detect imu -b <bus...> [-a <addr...>]   (addr default: 0x68 0x69)\n");
-        return 1;
-    }
-    // default probe addresses: the two I2C addresses an ICM-family IMU can answer on
-    if(addrs.empty())addrs = {0x68, 0x69};
+    if(buses.empty())buses = {1, 2, 4, 5, 6};
 
     printf("IMU scan: buses");
     for(int b : buses)printf(" %d", b);

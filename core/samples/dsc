@@ -4,7 +4,7 @@
 # external commands, run from the host shell:
 #   dsc help
 #   dsc version
-#   dsc detect imu|eeprom|camera -b <bus...> [-a <addr...>]
+#   dsc detect imu|eeprom|camera [-b <bus...>]
 #   dsc shell -d <device> [-m <mode>] [-w <W>] [-h <H>] [-f <fps>] [-o <odr>]
 #
 # internal commands, run inside `dsc shell`, which locks the device config once:
@@ -55,7 +55,7 @@ help_requested() {
 flag_help() {
     cat <<'EOF'
 device config:
-  -d <device>     device model, required       GS130WI | GS130WI_20260922 | GS130W
+  -d <device>     device model, required       GS130W | GS130WI | A1 | A1P
   -m <mode>       pipeline mode                raw | resize | rect
   -w <width>      output width, in pixels
   -h <height>     output height, in pixels
@@ -87,14 +87,14 @@ EOF
     cat <<'EOF'
 
 detect options:
-  -b <bus...>     I2C buses to scan; required; GS130WI on RDK X5: -b 4 6
-  -a <addr...>    I2C addresses to probe
-                  defaults per target: imu 0x68 0x69, eeprom 0x50, camera 0x30 0x32
+  -b <bus...>     I2C buses to scan; default: 1 2 4 5 6
+                  addresses are fixed per target: imu 0x68, eeprom 0x50,
+                  camera 0x30 0x31 0x32 0x33
 
 examples:
-  dsc detect camera -b 4 6
+  dsc detect camera
   dsc detect imu -b 4 6
-  dsc detect eeprom -b 4 6
+  dsc detect eeprom
   dsc shell -d GS130WI
   dsc shell -d GS130WI -m raw -w 1088 -h 1280 -f 30 -o 200
 
@@ -112,19 +112,19 @@ EOF
 
 detect_usage() {
     cat <<'EOF'
-usage: dsc detect <target> -b <bus...> [-a <addr...>]
+usage: dsc detect <target> [-b <bus...>]
 
 Scans I2C buses and addresses for devices.
 
   <target>        imu | eeprom | camera
-  -b <bus...>     I2C buses to scan; required; GS130WI on RDK X5: -b 4 6
-  -a <addr...>    I2C addresses to probe, in hex
-                  defaults per target: imu 0x68 0x69, eeprom 0x50, camera 0x30 0x32
+  -b <bus...>     I2C buses to scan; default: 1 2 4 5 6
+                  addresses are fixed per target: imu 0x68, eeprom 0x50,
+                  camera 0x30 0x31 0x32 0x33
 
 examples:
-  dsc detect camera -b 4 6
+  dsc detect camera
   dsc detect imu -b 4 6
-  dsc detect eeprom -b 4 6
+  dsc detect eeprom
 EOF
 }
 

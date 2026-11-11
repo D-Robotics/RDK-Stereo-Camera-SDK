@@ -37,7 +37,17 @@
 int vin_open(hbn_vnode_handle_t *vin, int mipi_rx,
              uint32_t width, uint32_t height, uint32_t fps)
 {
-    const uint32_t period_us = 1000000U / fps;   /* LPWM period = one frame, in us */
+    /* LPWM frame timing.  period holds pulse_period - 1 and the offset centres the
+       1 ms high pulse inside the frame window, so the software trigger that restarts the
+       waveform once per second never coincides with a pulse edge and exactly fps pulses
+       are emitted per second. */
+    const uint32_t pulse_period_us = 1000000U / fps;
+    const uint32_t high_us = 1000U;
+    const uint32_t remainder_us = 1000000U - pulse_period_us * fps;
+    const uint32_t phase_us = remainder_us + (pulse_period_us - high_us) / 2U;
+    const uint32_t period_us = pulse_period_us - 1U;
+    const uint32_t offset_us = phase_us + 1U;
+
     /* Packed RAW10 line, then rounded up to the plane alignment the ISP checks against. */
     const uint32_t ochn_wstride =
         (((width * 10U / 8U) + DSC_VIN_WSTRIDE_ALIGN - 1U) / DSC_VIN_WSTRIDE_ALIGN)
@@ -76,8 +86,8 @@ int vin_open(hbn_vnode_handle_t *vin, int mipi_rx,
         attr.vin_node_attr.lpwm_attr.lpwm_chn_attr[ch].trigger_source = 0;
         attr.vin_node_attr.lpwm_attr.lpwm_chn_attr[ch].trigger_mode   = 0;
         attr.vin_node_attr.lpwm_attr.lpwm_chn_attr[ch].period         = period_us;
-        attr.vin_node_attr.lpwm_attr.lpwm_chn_attr[ch].offset         = 10;
-        attr.vin_node_attr.lpwm_attr.lpwm_chn_attr[ch].duty_time      = 100;
+        attr.vin_node_attr.lpwm_attr.lpwm_chn_attr[ch].offset         = offset_us;
+        attr.vin_node_attr.lpwm_attr.lpwm_chn_attr[ch].duty_time      = 999;
         attr.vin_node_attr.lpwm_attr.lpwm_chn_attr[ch].threshold      = 0;
         attr.vin_node_attr.lpwm_attr.lpwm_chn_attr[ch].adjust_step    = 0;
     }
