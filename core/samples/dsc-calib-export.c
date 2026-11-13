@@ -214,7 +214,7 @@ static char *imu_yaml(const dsc_calibration_t *cal, int odr)
     fprintf(f, "accelerometer_random_walk:   %.12g\n", imu->accel_random_walk);
     fprintf(f, "gyroscope_noise_density:     %.12g\n", imu->gyro_noise);
     fprintf(f, "gyroscope_random_walk:       %.12g\n", imu->gyro_random_walk);
-    fprintf(f, "rostopic: /imu0\n");
+    fprintf(f, "rostopic: /imu_data\n");
     fprintf(f, "update_rate: %d.0\n", odr);
 
     fprintf(f, "\n# --- dstereo-cam extension: IMU intrinsics (not part of Kalibr's schema) ---\n");
