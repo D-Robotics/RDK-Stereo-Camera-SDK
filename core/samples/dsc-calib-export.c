@@ -150,6 +150,7 @@ static char *camchain_yaml(dsc_device_t *dev, const dsc_calibration_t *cal,
 
     fprintf(f, "# dstereo-cam EEPROM calibration, Kalibr camchain format\n");
     fprintf(f, "# p_to = T * p_from (T_cam_imu: IMU -> camera, T_cn_cnm1: cam0 -> cam1)\n");
+    fprintf(f, "# cam0 is the left camera and cam1 is the right camera.\n");
     if(imu_missing)
         fprintf(f, "# warning: the configuration expects an IMU but the device reported "
                    "none; T_cam_imu is omitted, so this file is camera-only\n");
@@ -158,8 +159,9 @@ static char *camchain_yaml(dsc_device_t *dev, const dsc_calibration_t *cal,
                "# T_imu_cam = inv(T_cam_imu).\n");
 
     for(int i = 0; i < 2; i++){
-        const dsc_camera_intrinsics_t *ci = i ? &cal->camera_left : &cal->camera_right;
-        const dsc_reference_frame_t ref = i ? DSC_REF_CAMERA_LEFT : DSC_REF_CAMERA_RIGHT;
+        /* Kalibr's usual convention: cam0 is the left camera and cam1 the right. */
+        const dsc_camera_intrinsics_t *ci = i ? &cal->camera_right : &cal->camera_left;
+        const dsc_reference_frame_t ref = i ? DSC_REF_CAMERA_RIGHT : DSC_REF_CAMERA_LEFT;
         double R[9], T[3];
 
         fprintf(f, "cam%d:\n", i);
@@ -171,7 +173,7 @@ static char *camchain_yaml(dsc_device_t *dev, const dsc_calibration_t *cal,
                 ci->dist_coeffs[0], ci->dist_coeffs[1], ci->dist_coeffs[2], ci->dist_coeffs[3]);
         fprintf(f, "  intrinsics: [%.12g, %.12g, %.12g, %.12g]\n", ci->fx, ci->fy, ci->cx, ci->cy);
         fprintf(f, "  resolution: [%d, %d]\n", w, h);
-        fprintf(f, "  rostopic: /cam%d/image_raw\n", i);
+        fprintf(f, "  rostopic: /image_%s/gray\n", i ? "right" : "left");
 
         if(has_imu){
             dsc_get_relative_R(dev, DSC_REF_IMU, ref, R);
@@ -183,9 +185,9 @@ static char *camchain_yaml(dsc_device_t *dev, const dsc_calibration_t *cal,
             fprintf(f, "  - [0.0, 0.0, 0.0, 1.0]\n");
         }
         if(i){
-            /* cam1 (left) from cam0 (right) */
-            dsc_get_relative_R(dev, DSC_REF_CAMERA_RIGHT, DSC_REF_CAMERA_LEFT, R);
-            dsc_get_relative_T(dev, DSC_REF_CAMERA_RIGHT, DSC_REF_CAMERA_LEFT, T);
+            /* cam1 (right) from cam0 (left): the usual Kalibr left-to-right chain. */
+            dsc_get_relative_R(dev, DSC_REF_CAMERA_LEFT, DSC_REF_CAMERA_RIGHT, R);
+            dsc_get_relative_T(dev, DSC_REF_CAMERA_LEFT, DSC_REF_CAMERA_RIGHT, T);
             fprintf(f, "  T_cn_cnm1:\n");
             for(int r = 0; r < 3; r++)
                 fprintf(f, "  - [%.12g, %.12g, %.12g, %.12g]\n",
