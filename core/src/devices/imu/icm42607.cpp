@@ -272,6 +272,15 @@ Status read(base::I2cDevice &bus, ImuHwFifo16Packet *out, std::size_t cap, std::
     return Status::Ok;
 }
 
+// The ICM-42607 datasheet documents the UI-filter bandwidth but no group delay for the
+// 1st-order low-pass path of this part, so there is no table to look the delay up in.
+Status group_delay_ns(base::I2cDevice &bus, uint64_t *gyro_ns, uint64_t *accel_ns)
+{
+    (void)bus;
+    if(!gyro_ns || !accel_ns)return Status::ParamError;
+    return Status::Unsupported;
+}
+
 bool full(base::I2cDevice &bus)
 {
     uint8_t val = 0;
@@ -310,6 +319,7 @@ extern const ModelDesc kIcm42607C = {
     stop,
     read,
     full,
+    group_delay_ns,
     deinit,
 };
 

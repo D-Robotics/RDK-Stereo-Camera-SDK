@@ -32,6 +32,13 @@ struct ModelDesc {
     Status (*read)  (base::I2cDevice &bus, ImuHwFifo16Packet *out,
                      std::size_t cap, std::size_t *n_out); /**< Read at most cap packets. */
     bool   (*full)(base::I2cDevice &bus); /**< Report and acknowledge FIFO overflow as required by the model. */
+    /**
+     * Read the model's configured sample-path delay from its registers and convert it
+     * into nanoseconds. The model returns Status::Unsupported when its datasheet does
+     * not document the delay for the programmed settings. The call reads registers, so
+     * it must not run while the model is streaming.
+     */
+    Status (*group_delay_ns)(base::I2cDevice &bus, uint64_t *gyro_ns, uint64_t *accel_ns);
     void   (*deinit)(base::I2cDevice &bus); /**< Restore the sensor to its idle state. */
 };
 
@@ -73,6 +80,20 @@ public:
 
     /** @return true when the hardware FIFO reports overflow/full; false also covers read failure. */
     bool full();
+
+    /**
+     * Read the sample-path group delay the bound model is currently configured for.
+     *
+     * The delay is read back from the registers, so this must be called between init()
+     * and start(): the I2C bus is not shared with the streaming reads.
+     *
+     * @param[out] gyro_ns  Gyroscope group delay in nanoseconds.
+     * @param[out] accel_ns Accelerometer group delay in nanoseconds.
+     * @retval Status::Ok Delay values written.
+     * @retval Status::ParamError A null output pointer or no bound model.
+     * @retval Status::Unsupported The model datasheet documents no delay for these settings.
+     */
+    Status group_delay_ns(uint64_t *gyro_ns, uint64_t *accel_ns);
 
     /** @return Statically allocated name of the bound model. */
     const char *name() const;

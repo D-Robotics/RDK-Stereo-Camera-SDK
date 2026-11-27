@@ -345,6 +345,26 @@ const char *dsc_get_imu_name(
 const char *dsc_get_imu_info(
     dsc_device_t *dev);
 
+/**
+ * @brief Get the sample-path group delay of the configured IMU filters.
+ *
+ * The delay is read back from the detected IMU when the device is initialized, so it
+ * reflects the filters that are actually programmed. It is the UI-filter group delay at
+ * DC as documented in the sensor datasheet, in nanoseconds.
+ *
+ * @param[in]  dev      Device handle from dsc_create().
+ * @param[out] gyro_ns  Gyroscope group delay in nanoseconds.
+ * @param[out] accel_ns Accelerometer group delay in nanoseconds.
+ * @retval DSC_OK Delay values written.
+ * @retval DSC_PARAM_ERROR An argument is NULL.
+ * @retval DSC_UNSUPPORTED No IMU is present, or its datasheet documents no delay for
+ *                         the programmed settings.
+ */
+dsc_err_t dsc_get_imu_group_delay_ns(
+    dsc_device_t *dev,
+    uint64_t *gyro_ns,
+    uint64_t *accel_ns);
+
 /* ==================== EEPROM Data ==================== */
 
 /** Camera distortion model used by dist_coeffs. */

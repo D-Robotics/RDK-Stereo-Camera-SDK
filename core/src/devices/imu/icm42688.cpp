@@ -28,6 +28,8 @@ constexpr uint8_t kIntfConfig1  = 0x4D;
 constexpr uint8_t kPwrMgmt0     = 0x4E;
 constexpr uint8_t kGyroConfig0  = 0x4F;
 constexpr uint8_t kAccelConfig0 = 0x50;
+constexpr uint8_t kGyroConfig1  = 0x51;   // UI_FILT_ORD bits[4:3]
+constexpr uint8_t kAccelConfig1 = 0x53;   // UI_FILT_ORD bits[4:3]
 constexpr uint8_t kGyroAccelCfg = 0x52;
 constexpr uint8_t kTmstConfig   = 0x54;
 constexpr uint8_t kFifoConfig1  = 0x5F;
@@ -94,6 +96,117 @@ bool lookup(const Code *tab, uint32_t value, uint8_t *bits)
 bool select_bank(base::I2cDevice &bus, uint8_t bank)
 {
     return bus.update(kBankSel, 0x07, bank) == Status::Ok;
+}
+
+/**
+ * Group delay @DC from the datasheet, in tenths of a millisecond.
+ *
+ * Rows are keyed by UI_FILT_ORD and by the ODR code in GYRO/ACCEL_CONFIG0; the ten
+ * columns follow kGroupDelayBw. A zero marks a combination the datasheet leaves blank,
+ * which the lookup reports as unsupported instead of guessing.
+ */
+struct DelayRow {
+    uint8_t  order;
+    uint8_t  odr;
+    uint16_t tenths_ms[10];
+};
+
+constexpr uint8_t kGroupDelayBw[] = {0, 1, 2, 3, 4, 5, 6, 7, 14, 15};
+
+constexpr DelayRow kGroupDelay[] = {
+    // 1st order filter (GYRO/ACCEL_UI_FILT_ORD = 00)
+    {0,  1, {0,   0,  0,  0,  0,   0,   0,    1,  0,  0}},
+    {0,  2, {0,   0,  0,  0,  0,   0,   0,    1,  0,  0}},
+    {0,  3, {0,   0,  0,  0,  0,   0,   0,    2,  0,  0}},
+    {0,  4, {0,   0,  0,  0,  0,   0,   0,    4,  0,  0}},
+    {0,  5, {0,   0,  0,  0,  0,   0,   0,    8,  0,  0}},
+    {0,  6, {6,  18, 20, 28, 31,  41,  47,   81, 15,  2}},
+    {0, 15, {11, 36, 40, 55, 61,  81,  93,  162, 30,  4}},
+    {0,  7, {27, 44, 50, 68, 76, 102, 117,  203, 38, 10}},
+    {0,  8, {53, 44, 50, 68, 76, 102, 117,  203, 38, 19}},
+    {0,  9, {105, 44, 50, 68, 76, 102, 117, 203, 38, 38}},
+    {0, 10, {210, 44, 50, 68, 76, 102, 117, 203, 38, 75}},
+    {0, 11, {210, 44, 50, 68, 76, 102, 117, 203, 38, 75}},
+    // 2nd order filter (GYRO/ACCEL_UI_FILT_ORD = 01)
+    {1,  1, {0,   0,  0,  0,  0,   0,   0,    1,  0,  0}},
+    {1,  2, {0,   0,  0,  0,  0,   0,   0,    1,  0,  0}},
+    {1,  3, {0,   0,  0,  0,  0,   0,   0,    2,  0,  0}},
+    {1,  4, {0,   0,  0,  0,  0,   0,   0,    4,  0,  0}},
+    {1,  5, {0,   0,  0,  0,  0,   0,   0,    8,  0,  0}},
+    {1,  6, {7,  21, 24, 32, 37,  52,  61,  120, 15,  2}},
+    {1, 15, {13, 41, 47, 64, 73, 104, 122,  240, 30,  4}},
+    {1,  7, {33, 51, 58, 80, 91, 129, 153,  300, 38, 10}},
+    {1,  8, {65, 51, 58, 80, 91, 129, 153,  300, 38, 19}},
+    {1,  9, {129, 51, 58, 80, 91, 129, 153, 300, 38, 38}},
+    {1, 10, {257, 51, 58, 80, 91, 129, 153, 300, 38, 75}},
+    {1, 11, {257, 51, 58, 80, 91, 129, 153, 300, 38, 75}},
+    // 3rd order filter (GYRO/ACCEL_UI_FILT_ORD = 10)
+    {2,  1, {0,   0,  0,  0,  0,   0,   0,    1,  0,  0}},
+    {2,  2, {0,   0,  0,  0,  0,   0,   0,    1,  0,  0}},
+    {2,  3, {0,   0,  0,  0,  0,   0,   0,    2,  0,  0}},
+    {2,  4, {0,   0,  0,  0,  0,   0,   0,    4,  0,  0}},
+    {2,  5, {0,   0,  0,  0,  0,   0,   0,    8,  0,  0}},
+    {2,  6, {8,  23, 27, 40, 46,  66,  82,  141, 15,  2}},
+    {2, 15, {16, 46, 54, 79, 92, 132, 163,  281, 30,  4}},
+    {2,  7, {40, 58, 68, 98, 114, 165, 204, 352, 38, 10}},
+    {2,  8, {80, 58, 68, 98, 114, 165, 204, 352, 38, 19}},
+    {2,  9, {159, 58, 68, 98, 114, 165, 204, 352, 38, 38}},
+    {2, 10, {318, 58, 68, 98, 114, 165, 204, 352, 38, 75}},
+    {2, 11, {318, 58, 68, 98, 114, 165, 204, 352, 38, 75}},
+};
+
+/** Map a GYRO/ACCEL_UI_FILT_BW value onto a column of kGroupDelay. */
+bool bw_column(uint8_t bw_sel, uint8_t *column)
+{
+    for(uint8_t i = 0; i < sizeof(kGroupDelayBw); ++i){
+        if(kGroupDelayBw[i] != bw_sel)continue;
+        *column = i;
+        return true;
+    }
+    return false;   // 8..13 are reserved
+}
+
+/** Look up one path: UI filter order, ODR code and bandwidth selector, all as read back. */
+Status path_delay_ns(uint8_t order, uint8_t odr, uint8_t bw_sel, uint64_t *out)
+{
+    uint8_t column;
+    if(!bw_column(bw_sel, &column))return Status::Unsupported;
+    for(const DelayRow &row : kGroupDelay){
+        if(row.order != order || row.odr != odr)continue;
+        if(!row.tenths_ms[column])return Status::Unsupported;
+        *out = static_cast<uint64_t>(row.tenths_ms[column]) * 100000ULL;   // 0.1 ms
+        return Status::Ok;
+    }
+    return Status::Unsupported;   // 11 = reserved filter order
+}
+
+Status group_delay_ns(base::I2cDevice &bus, uint64_t *gyro_ns, uint64_t *accel_ns)
+{
+    if(!gyro_ns || !accel_ns)return Status::ParamError;
+    if(!select_bank(bus, 0))return Status::HwError;
+
+    uint8_t gyro_config0 = 0, accel_config0 = 0, gyro_config1 = 0, accel_config1 = 0;
+    uint8_t filt_bw = 0;
+    if(bus.read(kGyroConfig0, &gyro_config0) != Status::Ok ||
+       bus.read(kAccelConfig0, &accel_config0) != Status::Ok ||
+       bus.read(kGyroConfig1, &gyro_config1) != Status::Ok ||
+       bus.read(kAccelConfig1, &accel_config1) != Status::Ok ||
+       bus.read(kGyroAccelCfg, &filt_bw) != Status::Ok)
+        return Status::HwError;
+
+    uint64_t gyro = 0, accel = 0;
+    if(const Status st = path_delay_ns((gyro_config1 >> 3) & 0x03,
+                                       gyro_config0 & 0x0F,
+                                       filt_bw & 0x0F, &gyro); st != Status::Ok)
+        return st;
+    if(const Status st = path_delay_ns((accel_config1 >> 3) & 0x03,
+                                       accel_config0 & 0x0F,
+                                       (filt_bw >> 4) & 0x0F, &accel); st != Status::Ok)
+        return st;
+
+    *gyro_ns  = gyro;
+    *accel_ns = accel;
+    return Status::Ok;
 }
 
 Status init(base::I2cDevice &bus, const ImuConfig &cfg)
@@ -264,6 +377,7 @@ extern const ModelDesc kIcm42688 = {
     stop,
     read,
     full,
+    group_delay_ns,
     deinit,
 };
 

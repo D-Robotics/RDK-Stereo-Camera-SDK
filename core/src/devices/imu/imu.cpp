@@ -62,6 +62,12 @@ Status Imu::read(ImuHwFifo16Packet *out, std::size_t cap, std::size_t *n_out){re
 
 bool Imu::full(){return desc_ && desc_->full(bus_);}
 
+Status Imu::group_delay_ns(uint64_t *gyro_ns, uint64_t *accel_ns)
+{
+    if(!desc_ || !gyro_ns || !accel_ns)return Status::ParamError;
+    return desc_->group_delay_ns(bus_, gyro_ns, accel_ns);
+}
+
 const char *Imu::name() const{return desc_->name;}
 
 const char *Imu::info() const{return desc_->info;}
