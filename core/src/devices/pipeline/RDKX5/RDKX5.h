@@ -2,15 +2,6 @@
  * @file RDKX5.h
  * @brief RDK X5 node helpers: one C function per pipeline stage, plus teardown.
  *
- * Internal header of the RDK X5 backend, included by RDKX5.cpp and the node .c files
- * next to it, never by platform-independent code, because it pulls in the platform's
- * driver headers.
- *
- * Handles and memory-manager buffers are reported through out-parameters and belong to
- * the caller after creation; partially configured handles may remain non-zero on a later
- * setup failure and must be cleaned up by the backend. GDC buffers are freed by
- * teardown_cam().
- *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
  * SPDX-License-Identifier: MIT

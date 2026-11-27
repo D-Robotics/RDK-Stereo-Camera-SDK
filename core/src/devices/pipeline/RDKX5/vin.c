@@ -2,14 +2,6 @@
  * @file vin.c
  * @brief vin node: MIPI capture (CIM) plus the LPWM exposure trigger.
  *
- * The LPWM channels share one frame period and one pulse shape, so both eyes are
- * triggered in lockstep. That period is also the master time base of the SDK's IMU
- * FSYNC tracker (see src/dsc.cpp), which is why it is derived from the configured
- * frame rate rather than passed in by the caller.
- *
- * The function contract (parameters, units, ownership, return value) is documented
- * with the declaration in RDKX5.h.
- *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
  * SPDX-License-Identifier: MIT

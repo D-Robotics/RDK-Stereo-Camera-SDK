@@ -118,10 +118,15 @@ public:
      * @param[in]  height       Expected frame height in pixels; must match the device frame.
      * @param[in]  y_stride     Bytes per row of @p y; must be at least @p width.
      * @param[in]  uv_stride    Bytes per row of @p uv; must be at least @p width.
-     * @param[out] timestamp_ns Receives the frame timestamp in nanoseconds.
+     * @param[out] timestamp_ns Receives the frame timestamp in nanoseconds: the middle
+     *                          of the exposure, which is the instant the image content
+     *                          refers to.
+     * @param[out] trigger_ns   Receives the trigger edge in nanoseconds, the instant the
+     *                          IMU FSYNC offset is measured from; the tracker anchors on
+     *                          this value rather than on @p timestamp_ns.
      * @param[in]  timeout_ms   Maximum time to wait for a frame, in milliseconds.
      * @retval Status::Ok Frame copied.
-     * @retval Status::ParamError A null buffer or timestamp, an uninitialized stream,
+     * @retval Status::ParamError A null buffer, timestamp or trigger, an uninitialized stream,
      *         or a width/height that does not match the device frame.
      * @retval Status::Timeout No frame arrived within @p timeout_ms.
      */
@@ -130,6 +135,7 @@ public:
                      uint32_t width, uint32_t height,
                      uint32_t y_stride, uint32_t uv_stride,
                      uint64_t *timestamp_ns,
+                     uint64_t *trigger_ns,
                      uint32_t timeout_ms);
 
 private:

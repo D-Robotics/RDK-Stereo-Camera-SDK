@@ -45,14 +45,21 @@ constexpr uint32_t kPymHwId = 3;
 // nodes unbound.
 constexpr uint32_t kIspSlotBase = 4;
 
-/** Convert the driver's LPWM trigger timestamp to nanoseconds.  Only trig_tv, the
- *  LPWM rising edge (exposure trigger instant), is used: that is the instant the IMU
- *  pairing needs.  There is deliberately no fallback to the driver's timestamps field
- *  or to tv, so a frame without trigger information reports 0. */
+int64_t trigger_ts_ns(const hbn_frame_info_t &info)
+{
+    return static_cast<int64_t>(info.trig_tv.tv_sec) * 1000000000LL +
+           static_cast<int64_t>(info.trig_tv.tv_usec) * 1000LL;
+}
+
+// Frames are dated at the middle of the exposure, which is what the image shows; the
+// tracker keeps the trigger edge, because its FSYNC offset is measured from that edge.
 uint64_t frame_ts_ns(const hbn_frame_info_t &info)
 {
-    return static_cast<uint64_t>(info.trig_tv.tv_sec) * 1000000000ULL +
-           static_cast<uint64_t>(info.trig_tv.tv_usec) * 1000ULL;
+    const int64_t trigger_ns = trigger_ts_ns(info);
+    const int64_t frame_start_ns = static_cast<int64_t>(info.tv.tv_sec) * 1000000000LL +
+                                   static_cast<int64_t>(info.tv.tv_usec) * 1000LL;
+    if(trigger_ns <= 0 || frame_start_ns <= trigger_ns)return static_cast<uint64_t>(trigger_ns > 0 ? trigger_ns : 0);
+    return static_cast<uint64_t>(trigger_ns + (frame_start_ns - trigger_ns) / 2);
 }
 
 
@@ -469,10 +476,12 @@ Status Pipeline::get_frame(CamIndex idx,
                            uint32_t width, uint32_t height,
                            uint32_t y_stride, uint32_t uv_stride,
                            uint64_t *timestamp_ns,
+                           uint64_t *trigger_ns,
                            uint32_t timeout_ms)
 {
     // y, uv and timestamp_ns are caller-owned; the stream must be initialized
-    if(y == nullptr || uv == nullptr || timestamp_ns == nullptr || !impl_->inited)
+    if(y == nullptr || uv == nullptr || timestamp_ns == nullptr || trigger_ns == nullptr ||
+       !impl_->inited)
         return Status::ParamError;
 
     const std::size_t i = static_cast<std::size_t>(idx);
@@ -519,6 +528,7 @@ Status Pipeline::get_frame(CamIndex idx,
     // A frame without LPWM trigger information has no exposure instant to pair with IMU
     // samples: this is a hardware fault, reported as HwError so the capture thread stops
     // instead of delivering a timestamp from another clock.
+    const int64_t trigger_value_ns = trigger_ts_ns(grouped ? grp.info : img.info);
     const uint64_t ts_ns = frame_ts_ns(grouped ? grp.info : img.info);
     if(ts_ns == 0){
         if(grouped)hbn_vnode_releaseframe_group(c.output_node, c.output_chn, &grp);
@@ -538,6 +548,7 @@ Status Pipeline::get_frame(CamIndex idx,
                    buf.virt_addr[1] + (std::size_t)r * buf.stride, width);
 
     *timestamp_ns = ts_ns;
+    *trigger_ns = static_cast<uint64_t>(trigger_value_ns > 0 ? trigger_value_ns : 0);
 
     if(grouped)hbn_vnode_releaseframe_group(c.output_node, c.output_chn, &grp);
     else       hbn_vnode_releaseframe(c.output_node, c.output_chn, &img);
