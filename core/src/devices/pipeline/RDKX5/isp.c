@@ -2,12 +2,6 @@
  * @file isp.c
  * @brief isp node: offline (DDR) ISP, NV12 output.
  *
- * RAW10 frames arriving from VIN in DDR are processed here and handed on as NV12,
- * which is the format every later stage (GDC, VSE) and the caller's buffers use.
- *
- * The function contract (parameters, units, ownership, return value) is documented
- * with the declaration in RDKX5.h.
- *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
  * SPDX-License-Identifier: MIT

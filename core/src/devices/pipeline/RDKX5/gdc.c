@@ -2,13 +2,6 @@
  * @file gdc.c
  * @brief gdc node: apply +0.5/clamp/rotation to the map, encode it as a bin, then open the GDC vnode.
  *
- * The map handed in comes either from base::stereo_rectify() or from the identity map
- * built in RDKX5.cpp: an array of RemapPoint{double x, y} entries, reinterpreted here
- * as the driver's point_t{double x, y} so it can be passed to the GDC without a
- * conversion pass. The two layouts therefore have to stay identical -- nothing checks
- * that at compile time, so a change to RemapPoint (src/types.hpp) must be mirrored in
- * point_t.
- *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
  * SPDX-License-Identifier: MIT

@@ -2,13 +2,6 @@
  * @file RDKX5.cpp
  * @brief RDK X5 pipeline: camera probe/init, VIN-ISP-VSE/GDC flow setup, frame fetch.
  *
- * Backend of dsc::pipeline::Pipeline for the RDK X5 / Horizon driver stack, built
- * on the node helpers declared in RDKX5.h.
- *
- * Ownership: acquired handles and buffers are stored in Impl. deinit() releases a
- * fully initialized stream; see pipeline.hpp for the partial-initialization limitation.
- * Calibration remains caller-owned and its pointer is not retained after init().
- *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
  * SPDX-License-Identifier: MIT
@@ -35,21 +28,21 @@ namespace {
 constexpr uint16_t kChipIdReg = 0x3107;
 constexpr uint16_t kChipId    = 0x0132;
 
-/**
- * @brief Convert the driver's LPWM trigger timestamp to nanoseconds.
- *
- * Only trig_tv, the LPWM rising edge (exposure trigger instant), is used: that is the
- * instant the IMU pairing needs. There is deliberately no fallback to the driver's
- * timestamps field or to tv, so a frame without trigger information reports 0 rather
- * than a value from a different clock.
- *
- * @param[in] info Frame information returned with the frame.
- * @return Timestamp in nanoseconds on the device clock, or 0 when trig_tv is unset.
- */
+int64_t trigger_ts_ns(const hbn_frame_info_t &info)
+{
+    return static_cast<int64_t>(info.trig_tv.tv_sec) * 1000000000LL +
+           static_cast<int64_t>(info.trig_tv.tv_usec) * 1000LL;
+}
+
+// Frames are dated at the middle of the exposure, which is what the image shows; the
+// tracker keeps the trigger edge, because its FSYNC offset is measured from that edge.
 uint64_t frame_ts_ns(const hbn_frame_info_t &info)
 {
-    return static_cast<uint64_t>(info.trig_tv.tv_sec) * 1000000000ULL +
-           static_cast<uint64_t>(info.trig_tv.tv_usec) * 1000ULL;
+    const int64_t trigger_ns = trigger_ts_ns(info);
+    const int64_t frame_start_ns = static_cast<int64_t>(info.tv.tv_sec) * 1000000000LL +
+                                   static_cast<int64_t>(info.tv.tv_usec) * 1000LL;
+    if(trigger_ns <= 0 || frame_start_ns <= trigger_ns)return static_cast<uint64_t>(trigger_ns > 0 ? trigger_ns : 0);
+    return static_cast<uint64_t>(trigger_ns + (frame_start_ns - trigger_ns) / 2);
 }
 
 } // namespace
@@ -387,10 +380,12 @@ Status Pipeline::get_frame(CamIndex idx,
                            uint32_t width, uint32_t height,
                            uint32_t y_stride, uint32_t uv_stride,
                            uint64_t *timestamp_ns,
+                           uint64_t *trigger_ns,
                            uint32_t timeout_ms)
 {
     // y, uv and timestamp_ns are caller-owned; the stream must be initialized
-    if(y == nullptr || uv == nullptr || timestamp_ns == nullptr || !impl_->inited)
+    if(y == nullptr || uv == nullptr || timestamp_ns == nullptr || trigger_ns == nullptr ||
+       !impl_->inited)
         return Status::ParamError;
 
     const std::size_t i = static_cast<std::size_t>(idx);
@@ -408,9 +403,7 @@ Status Pipeline::get_frame(CamIndex idx,
         return Status::ParamError;
     }
 
-    // A frame without LPWM trigger information has no exposure instant to pair with IMU
-    // samples: this is a hardware fault, reported as HwError so the capture thread stops
-    // instead of delivering a timestamp from another clock.
+    const int64_t trigger_value_ns = trigger_ts_ns(img.info);
     const uint64_t ts_ns = frame_ts_ns(img.info);
     if(ts_ns == 0){
         hbn_vnode_releaseframe(c.output_node, c.output_chn, &img);
@@ -426,6 +419,7 @@ Status Pipeline::get_frame(CamIndex idx,
                img.buffer.virt_addr[1] + (std::size_t)r * img.buffer.stride, width);
 
     *timestamp_ns = ts_ns;
+    *trigger_ns = static_cast<uint64_t>(trigger_value_ns > 0 ? trigger_value_ns : 0);
 
     hbn_vnode_releaseframe(c.output_node, c.output_chn, &img);
     return Status::Ok;

@@ -204,13 +204,16 @@ static void camera_thread_func(dsc_device_t *dev)
         std::array<dsc_image_nv12_t, static_cast<std::size_t>(CamIndex::Num)> frame{};
         Status st;
         uint64_t ts[static_cast<std::size_t>(CamIndex::Num)] = {0, 0};
+        uint64_t trig[static_cast<std::size_t>(CamIndex::Num)] = {0, 0};
         uint8_t *y[static_cast<std::size_t>(CamIndex::Num)]  = {nullptr, nullptr};
         uint8_t *uv[static_cast<std::size_t>(CamIndex::Num)] = {nullptr, nullptr};
         uint32_t stride;
         const uint32_t width  = dev->output_w;
         const uint32_t height = dev->output_h;
 
-        // fetch the FSYNC-bound eye (master clock) first, then the other eye
+        // Fetch the FSYNC-bound eye (master clock) first, then the other eye. Frames are
+        // dated at the exposure midpoint, while the tracker anchors on the trigger edge
+        // the FSYNC offset is measured from.
         const CamIndex F = dev->fsync_camera;
         const CamIndex O = (F == CamIndex::Right) ? CamIndex::Left : CamIndex::Right;
         const size_t fi = static_cast<std::size_t>(F);
@@ -275,7 +278,7 @@ static void camera_thread_func(dsc_device_t *dev)
         }
 
         st = dev->pipeline->get_frame(F, y[fi], uv[fi],
-                                      width, height, stride, stride, &ts[fi], 100);
+                                      width, height, stride, stride, &ts[fi], &trig[fi], 100);
         if(st == Status::HwError){          // hardware fault, e.g. a frame without LPWM trigger
             dev->state.store(Status::HwError);
             goto free_frame;
@@ -283,11 +286,11 @@ static void camera_thread_func(dsc_device_t *dev)
         if(st != Status::Ok)goto free_frame;
         if(dev->tracker){
             std::lock_guard<std::mutex> lock(dev->tracker_mtx);
-            dev->tracker->update_master_timestamp_ns(ts[fi]);
+            dev->tracker->update_master_timestamp_ns(trig[fi]);
         }
 
         st = dev->pipeline->get_frame(O, y[oi], uv[oi],
-                                      width, height, stride, stride, &ts[oi], 100);
+                                      width, height, stride, stride, &ts[oi], &trig[oi], 100);
         if(st == Status::HwError){          // hardware fault, e.g. a frame without LPWM trigger
             dev->state.store(Status::HwError);
             goto free_frame;
@@ -303,7 +306,7 @@ static void camera_thread_func(dsc_device_t *dev)
             const size_t lag = (ts[R] < ts[L]) ? R : L;   // smaller timestamp = older frame
             const CamIndex lag_idx = (lag == R) ? CamIndex::Right : CamIndex::Left;
             st = dev->pipeline->get_frame(lag_idx, y[lag], uv[lag],
-                                          width, height, stride, stride, &ts[lag], 100);
+                                          width, height, stride, stride, &ts[lag], &trig[lag], 100);
             if(st == Status::HwError){          // hardware fault, e.g. a frame without LPWM trigger
             dev->state.store(Status::HwError);
             goto free_frame;
@@ -311,7 +314,7 @@ static void camera_thread_func(dsc_device_t *dev)
         if(st != Status::Ok)goto free_frame;
             if(dev->tracker && lag == fi){
                 std::lock_guard<std::mutex> lock(dev->tracker_mtx);
-                dev->tracker->update_master_timestamp_ns(ts[fi]);
+                dev->tracker->update_master_timestamp_ns(trig[fi]);
             }
         }
 
