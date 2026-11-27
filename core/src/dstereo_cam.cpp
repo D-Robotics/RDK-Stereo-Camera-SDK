@@ -27,7 +27,6 @@
 #include <thread>
 #include <unistd.h>
 #include <utility>
-#include <vector>
 
 using namespace dsc;
 
@@ -70,7 +69,8 @@ struct dsc_device_s {
     std::atomic<bool>        camera_on{false}; // set once IMU finds FSYNC; the camera waits for it to start streaming
     std::atomic<Status>      state{Status::ThreadClosed}; // Ok = running, ThreadClosed = idle, anything else = faulted (deinit() clears)
 
-    // Timestamp tracker (master = camera LPWM frame period, slave = IMU FSYNC)
+    // Serialize the master and slave calls from their capture threads.
+    std::mutex tracker_mtx;
     std::unique_ptr<base::TimestampTracker> tracker;
 
     // Cached from the config at init (used by the threads)
@@ -129,21 +129,14 @@ static std::pair<double*, double*> frame_extrinsics(dsc_device_t *dev, dsc_refer
 
 /* ---- Background threads ---- */
 
-// IMU packet cache limit: exceeding it means the FSYNC signal is lost
-constexpr std::size_t kMaxImuCache = 1000;
-
-// IMU thread: drain the hardware FIFO, detect the FSYNC handshake, feed the
-// timestamp tracker, and pair cached packets with corrected timestamps
+// Release the camera at startup, then timestamp IMU samples as they are read.
 static void imu_thread_func(dsc_device_t *dev)
 {
     const double accel_scale = (double)dev->accel_fsr_g * 9.80665 / 32768.0;
     const double gyro_scale  = (double)dev->gyro_fsr_dps * 3.14159265358979323846 / 180.0 / 32768.0;
 
     ImuHwFifo16Packet raw[128]; // hardware FIFO holds up to 128 packets
-    std::vector<ImuHwFifo16Packet> cache;
-    std::vector<dsc_imu_packet_t> pending; // staging area, enqueued oldest to newest
-
-    bool available = false;
+    bool camera_released = false;
 
     while(dev->state.load() == Status::Ok) {
         if(dev->imu->full()){dev->state.store(Status::HwError);return ;}
@@ -152,56 +145,33 @@ static void imu_thread_func(dsc_device_t *dev)
         Status st = dev->imu->read(raw, 128, &n);
         if(st != Status::Ok || n == 0) { usleep(1000); continue; }
 
-        // Iterate packets
-        for(std::size_t i = 0; i < n; i++){
-            // cache too large = no FSYNC anchor for a long time, latch a fault
-            if(cache.size() > kMaxImuCache){dev->state.store(Status::HwError); return ;}
-
-            // Try the startup handshake
-            if(!available){
-                // the latest packet being an FSYNC packet means sync is established
-                if(i+1==n && raw[i].is_fsync){
-                    dev->camera_on.store(true);
-                    available = true;
-                }
+        if(!camera_released){
+            if(raw[n - 1].is_fsync){
+                dev->camera_on.store(true);
+                camera_released = true;
             }
-            // Post-handshake work
-            else{
-                // feed the tracker (FSYNC packets carry the edge offset, normal packets do not)
-                const uint64_t delta_ns = static_cast<uint64_t>(raw[i].delta_time_us) * 1000;
-                dev->tracker->feed_slave_sample(raw[i].is_fsync ? &delta_ns : nullptr);
-                // cache the packet
-                cache.push_back(raw[i]);
+            continue;
+        }
 
-                // pair only after an FSYNC anchor (only FSYNC generates timestamps into ready_)
-                if(raw[i].is_fsync){
-                    // take all timestamps (newest to oldest), pair with the cache tail (newest to oldest), match as many as possible
-                    const std::vector<uint64_t> ts_list = dev->tracker->take_ready();
-                    std::size_t k = 0;
-                    while(!cache.empty() && k < ts_list.size()){
-                        const ImuHwFifo16Packet &p = cache.back();
-                        dsc_imu_packet_t pkt;
-                        pkt.accel[0] = (float)(p.accel[0] * accel_scale);
-                        pkt.accel[1] = (float)(p.accel[1] * accel_scale);
-                        pkt.accel[2] = (float)(p.accel[2] * accel_scale);
-                        pkt.gyro[0]  = (float)(p.gyro[0] * gyro_scale);
-                        pkt.gyro[1]  = (float)(p.gyro[1] * gyro_scale);
-                        pkt.gyro[2]  = (float)(p.gyro[2] * gyro_scale);
-                        pkt.temp     = (float)p.temp / 2.07f + 25.0f;
-                        pkt.is_fsync = p.is_fsync;
-                        pkt.timestamp_ns = ts_list[k];
-                        pending.push_back(pkt);
-                        cache.pop_back();
-                        k++;
-                    }
-                    // whichever side runs out first, clear both remainders
-                    cache.clear();
-                    // publish: push into imu_fifo oldest to newest
-                    for(auto it = pending.rbegin(); it != pending.rend(); ++it)
-                        dev->imu_fifo->push(*it);
-                    pending.clear();
-                }
+        for(std::size_t i = 0; i < n; ++i){
+            const auto &p = raw[i];
+            uint64_t delta_ns = static_cast<uint64_t>(p.delta_time_us) * 1000;
+            uint64_t timestamp_ns;
+            {
+                std::lock_guard<std::mutex> lock(dev->tracker_mtx);
+                timestamp_ns = dev->tracker->get_slave_timestamp(p.is_fsync, p.is_fsync ? &delta_ns : nullptr);
             }
+            if(timestamp_ns == 0)continue;
+
+            dsc_imu_packet_t pkt{};
+            for(std::size_t axis = 0; axis < 3; ++axis){
+                pkt.accel[axis] = static_cast<float>(p.accel[axis] * accel_scale);
+                pkt.gyro[axis] = static_cast<float>(p.gyro[axis] * gyro_scale);
+            }
+            pkt.temp = static_cast<float>(p.temp) / 2.07f + 25.0f;
+            pkt.is_fsync = p.is_fsync;
+            pkt.timestamp_ns = timestamp_ns;
+            dev->imu_fifo->push(pkt);
         }
         if(dev->state.load() != Status::Ok)break;
     }
@@ -311,8 +281,10 @@ static void camera_thread_func(dsc_device_t *dev)
             goto free_frame;
         }
         if(st != Status::Ok)goto free_frame;
-        // upload the master clock phase from the bound eye's new frame first
-        dev->tracker->update_master_timestamp_ns(ts[fi]);
+        if(dev->tracker){
+            std::lock_guard<std::mutex> lock(dev->tracker_mtx);
+            dev->tracker->update_master_timestamp_ns(ts[fi]);
+        }
 
         st = dev->pipeline->get_frame(O, y[oi], uv[oi],
                                       width, height, stride, stride, &ts[oi], 100);
@@ -337,8 +309,10 @@ static void camera_thread_func(dsc_device_t *dev)
             goto free_frame;
         }
         if(st != Status::Ok)goto free_frame;
-            if(lag == fi)   // refetched the bound eye; upload the phase again
+            if(dev->tracker && lag == fi){
+                std::lock_guard<std::mutex> lock(dev->tracker_mtx);
                 dev->tracker->update_master_timestamp_ns(ts[fi]);
+            }
         }
 
         if(dev->stereo_layout == DSC_STEREO_LAYOUT_NONE){
@@ -474,9 +448,6 @@ dsc_err_t dsc_init(
     dev->fsync_camera = (cfg->camera_config.fsync_camera == DSC_CAMERA_RIGHT_IDX)
                              ? CamIndex::Right : CamIndex::Left;
 
-    // Timestamp tracker (master = camera LPWM frame period, slave = IMU FSYNC)
-    dev->tracker.reset(new base::TimestampTracker(1000000000ULL / dev->fps));
-
     // Initialize the camera (stream setup config, no streaming)
     {
         const dsc_camera_config_t &cc = cfg->camera_config;
@@ -517,6 +488,7 @@ dsc_err_t dsc_deinit(
     dev->eeprom.reset();     // close I2C
     dev->camera_fifo.reset();
     dev->imu_fifo.reset();
+    dev->tracker.reset();
     return DSC_OK;
 }
 
@@ -530,6 +502,13 @@ dsc_err_t dsc_start(
     if(st == Status::Ok)return DSC_PARAM_ERROR;            // already started
     if(st != Status::ThreadClosed)return to_err(st);               // faulted: deinit() first
     if(!dev->pipeline)return DSC_PARAM_ERROR;           // not initialized
+    if(dev->imu){
+        if(dev->fps == 0)return DSC_PARAM_ERROR;
+        // Match the LPWM register: the period is configured in whole microseconds
+        // (vin.c: pulse_period_us = 1000000 / fps), so 1e9/fps is off by up to 1 us.
+        dev->tracker = std::make_unique<base::TimestampTracker>(
+            (1000000U / dev->fps) * 1000U);
+    }
 
     dev->camera_on = false;
     dev->state.store(Status::Ok);

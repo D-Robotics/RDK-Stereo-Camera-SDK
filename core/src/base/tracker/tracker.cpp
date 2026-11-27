@@ -21,7 +21,8 @@ namespace dsc {
 namespace base {
 
 TimestampTracker::TimestampTracker(uint32_t master_cycle_ns)
-    : master_cycle_ns_(master_cycle_ns), mtx_(std::make_unique<std::mutex>())
+    : master_cycle_ns_(master_cycle_ns),
+      pi_controller_(0.2, 0.0, 0.0)
 {}
 
 // The first master timestamp doubles as the phase reference: it is kept as first_ns and
@@ -29,138 +30,103 @@ TimestampTracker::TimestampTracker(uint32_t master_cycle_ns)
 void TimestampTracker::update_master_timestamp_ns(
     uint64_t timestamp_ns)
 {
-    std::lock_guard<std::mutex> lock(*mtx_);
-    if(master_.first_ns == 0)master_.first_ns = timestamp_ns;
-    master_.last_ns = timestamp_ns;
-
+    if(master_.first_ts_ns == 0)master_.first_ts_ns = timestamp_ns;
+    master_.last_ts_ns = timestamp_ns;
 }
 
-// Lock-free; the caller (a public method) holds the lock
-// Snaps a predicted edge onto the master clock: the shift is always a whole number of
-// nominal periods, so the result stays on the master phase grid while being the edge
-// closest to the prediction (within half a period, the correction is not expected to
-// exceed that).
-uint64_t TimestampTracker::align_master_phase(
-    uint64_t predicted) const
+uint64_t TimestampTracker::get_slave_timestamp(bool is_fsync, uint64_t *trig_fsync_dt_ns)
 {
-    uint64_t aligned = master_.last_ns;
+    /////////////////////////////////////////////////////////////////
+    // 首个 fsync 出现前丢弃
+    // 首个 fsync 出现时记录 dt
+    /////////////////////////////////////////////////////////////////
+    if(slave_.first_trig_fsync_dt_ns == UINT64_MAX && is_fsync)
+        slave_.first_trig_fsync_dt_ns = *trig_fsync_dt_ns;
+    if(slave_.first_trig_fsync_dt_ns == UINT64_MAX)return 0;
+    /////////////////////////////////////////////////////////////////
 
-    while(aligned > predicted + master_cycle_ns_ / 2)aligned -= master_cycle_ns_;
-    while(aligned < predicted - master_cycle_ns_ / 2)aligned += master_cycle_ns_;
+    ++slave_.sample_count;
 
-    return aligned;
-}
+    if(is_fsync)++slave_.fsync_count;
 
-// Handshake: the tracker only starts producing timestamps after an anchor sample has
-// been seen, two master timestamps have arrived, and another anchor has confirmed the
-// key point.  Until then samples are counted and dropped.
-void TimestampTracker::feed_slave_sample(
-    const uint64_t *delta_time_ns)
-{
-    std::lock_guard<std::mutex> lock(*mtx_);
-    const bool fsync = (delta_time_ns != nullptr);
+    /////////////////////////////////////////////////////////////////
+    // 主时钟有效后的第一个 fsync 开始才有正常的计算逻辑
+    /////////////////////////////////////////////////////////////////
+    if(master_.first_ts_ns == 0)return 0;
+    /////////////////////////////////////////////////////////////////
 
-    switch(slave_.phase){
-    case Phase::WaitFirstAnchor: // wait for the first anchor
-        // first-anchor branch
-        if(fsync && !slave_.has_first_anchor){
-            slave_.has_first_anchor = true;
-            slave_.first_delta_time_ns = *delta_time_ns;
-            slave_.phase = Phase::WaitTwoMaster;
-        }
-        return ;
+    /////////////////////////////////////////////////////////////////
+    // fsync 帧：先计算本帧正确时间戳，再更新 dt
+    /////////////////////////////////////////////////////////////////
+    if(is_fsync){
+        // 首个 fsync 下的逻辑
+        if(slave_.last_fsync_ts_ns == 0){
+            --slave_.fsync_count; // 首个 fsync 不计入周期计算
+            --slave_.sample_count; // 首个 sample 不计入周期计算
+            /////////////////////////////////////////////////////////////////
+            // 计算当前时间戳
+            /////////////////////////////////////////////////////////////////
+            uint64_t trigger_ts_ns = master_.first_ts_ns + slave_.fsync_count * master_cycle_ns_;
+            // 周期内矫正到最新主时钟相位
+            uint64_t tmp_trigger_ts_ns = master_.last_ts_ns;
+            while(tmp_trigger_ts_ns < trigger_ts_ns - master_cycle_ns_ / 2)tmp_trigger_ts_ns += master_cycle_ns_;
+            while(tmp_trigger_ts_ns > trigger_ts_ns + master_cycle_ns_ / 2)tmp_trigger_ts_ns -= master_cycle_ns_;
+            uint64_t ts_ns = tmp_trigger_ts_ns + *trig_fsync_dt_ns;
 
-    case Phase::WaitTwoMaster:
-        // wait for two Master clocks to arrive
-        if(master_.first_ns != 0 && master_.first_ns < master_.last_ns)
-            slave_.phase = Phase::WaitKeyPoint;
+            /////////////////////////////////////////////////////////////////
+            // 计算 slave 周期
+            /////////////////////////////////////////////////////////////////
+            slave_.period_ns = (ts_ns - master_.first_ts_ns - slave_.first_trig_fsync_dt_ns) / slave_.sample_count;
 
-        [[fallthrough]];
-
-    case Phase::WaitKeyPoint: // key frame after two Masters
-        // both Phase::WaitTwoMaster and Phase::WaitKeyPoint conditions are met
-        if(fsync && slave_.phase == Phase::WaitKeyPoint){
-            slave_.phase = Phase::Tracking;
-            slave_.last_anchor_edge_timestamp_ns = master_.first_ns;
-            slave_.last_anchor_sample_timestamp_ns = master_.first_ns + slave_.first_delta_time_ns;
-        }
-
-        // count during the wait phases
-        if(fsync)slave_.anchor_count++;
-        slave_.sample_count++;
-
-        // intercept non-anchor frames
-        if(slave_.phase != Phase::Tracking)return;
-        
-        // the anchor frame happens to share the Tracking-phase computation
-        [[fallthrough]];
-
-    case Phase::Tracking:
-        // anchor-frame computation
-        if(fsync){
-            // Predicted edge of the current anchor, snapped to the master phase, then
-            // shifted by the edge-to-sample offset to reach the slave-clock value.
-            uint64_t anchor_edge_timestamp_ns = 
-                slave_.last_anchor_edge_timestamp_ns + slave_.anchor_count * master_cycle_ns_;
-            anchor_edge_timestamp_ns = align_master_phase(anchor_edge_timestamp_ns);
-            uint64_t anchor_sample_timestamp_ns = anchor_edge_timestamp_ns + *delta_time_ns;
-
-            // compute the slave-clock interval
-            // Mean interval over the samples seen since the previous anchor, measured on
-            // the slave clock; it spans the anchor period, so it absorbs the drift between
-            // the two clocks.
-            uint64_t slave_gap_ns = 
-                (anchor_sample_timestamp_ns - slave_.last_anchor_sample_timestamp_ns) / slave_.sample_count;
-
-            // push into ready_: ordinary samples step by gap; the last one is the current anchor
-            for(uint32_t j = 1; j <= slave_.sample_count; j++)
-                ready_.push_back(slave_.last_anchor_sample_timestamp_ns + slave_gap_ns * j);
-
-            slave_.last_anchor_edge_timestamp_ns = anchor_edge_timestamp_ns;
-            slave_.last_anchor_sample_timestamp_ns = anchor_sample_timestamp_ns;
-
+            // 更新状态
+            slave_.last_ts_ns = ts_ns;
+            slave_.last_fsync_ts_ns = ts_ns;
+            slave_.last_trig_fsync_dt_ns = *trig_fsync_dt_ns;
             slave_.sample_count = 0;
+
+            return ts_ns;
         }
+        // 后续 fsync 下的逻辑
+        else{
+            /////////////////////////////////////////////////////////////////
+            // 计算当前时间戳
+            /////////////////////////////////////////////////////////////////
+            uint64_t trigger_ts_ns = slave_.last_fsync_ts_ns - slave_.last_trig_fsync_dt_ns + master_cycle_ns_;
+            // 周期内矫正到最新主时钟相位
+            uint64_t tmp_trigger_ts_ns = master_.last_ts_ns;
+            while(tmp_trigger_ts_ns < trigger_ts_ns - master_cycle_ns_ / 2)tmp_trigger_ts_ns += master_cycle_ns_;
+            while(tmp_trigger_ts_ns > trigger_ts_ns + master_cycle_ns_ / 2)tmp_trigger_ts_ns -= master_cycle_ns_;
+            uint64_t ts_ns = tmp_trigger_ts_ns + *trig_fsync_dt_ns;
 
-        // count the current sample (the one with FSYNC) into the new period
-        slave_.sample_count++;
-        slave_.anchor_count = 1;
-        return ;
+            /////////////////////////////////////////////////////////////////
+            // 周期误差 = 实测周期 - 当前周期；每个 FSYNC 算一拍
+            /////////////////////////////////////////////////////////////////
+            if(slave_.sample_count > 0){
+                const int64_t anchor_ns = ts_ns;
+                const int64_t previous_anchor_ns = slave_.last_fsync_ts_ns;
+                const int64_t period_ns = slave_.period_ns;
+                const int64_t measured_ns = (anchor_ns - previous_anchor_ns) / slave_.sample_count;
+                const auto correction_ns = static_cast<int64_t>(
+                    pi_controller_.update(measured_ns - period_ns, 1.0));
+                slave_.period_ns = static_cast<uint32_t>(period_ns + correction_ns);
+            }
+
+            // 更新状态
+            slave_.last_ts_ns += slave_.period_ns;
+            slave_.last_fsync_ts_ns = slave_.last_ts_ns;
+            slave_.last_trig_fsync_dt_ns = *trig_fsync_dt_ns;
+            slave_.sample_count = 0;
+
+            return slave_.last_ts_ns;
+        }
     }
-}
+    // 普通帧
+    else{
+        slave_.last_ts_ns += slave_.period_ns;
+        return slave_.last_ts_ns;
+    }
 
-// Newest entry first: ready_ is filled oldest to newest inside one anchor period.
-bool TimestampTracker::get_timestamp(uint64_t *slave_timestamp_ns)
-{
-    std::lock_guard<std::mutex> lock(*mtx_);
-    if(!slave_timestamp_ns || ready_.empty())return false;
-    *slave_timestamp_ns = ready_.back();
-    ready_.pop_back();
-    return true;
-}
-
-std::size_t TimestampTracker::ready_count() const
-{
-    std::lock_guard<std::mutex> lock(*mtx_);
-    return ready_.size();
-}
-
-std::vector<uint64_t> TimestampTracker::take_ready()
-{
-    std::lock_guard<std::mutex> lock(*mtx_);
-    std::vector<uint64_t> out;
-    out.reserve(ready_.size());
-    // newest to oldest: back -> front; first element = current anchor sample
-    for(auto it = ready_.rbegin(); it != ready_.rend(); ++it)
-        out.push_back(*it);
-    ready_.clear();
-    return out;
-}
-
-void TimestampTracker::clear_ready()
-{
-    std::lock_guard<std::mutex> lock(*mtx_);
-    ready_.clear();
+    return 0;
 }
 
 } // namespace base
