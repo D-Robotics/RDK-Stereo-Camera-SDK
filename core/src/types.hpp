@@ -2,11 +2,7 @@
  * @file types.hpp
  * @brief Internal C++ shared types: status codes, configuration, calibration, and
  *        FIFO policy.
- *
- * Every type here is an internal detail of the library; the customer-facing
- * equivalents live in include/dsc.h and are converted at the C API boundary.
- * Conventions used throughout this header: SI units with the unit in the field
- * name, row-major matrices, and OpenCV parameter orders.
+ * @brief 内部 C++ 共享类型：状态码、配置、标定以及 FIFO 策略。
  *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
@@ -20,167 +16,137 @@
 
 namespace dsc {
 
-// ============================== Error codes ==============================
-
-/**
- * Internal result code, returned by every internal call that can fail and mapped
- * 1:1 onto ::dsc_err_t at the C API boundary.  Callers must compare against
- * Status::Ok rather than testing for a specific failure.
- */
+// Status maps 1:1 to dsc_err_t; test for Status::Ok to detect success.
+// Status 与 dsc_err_t 一一对应；用 Status::Ok 判断是否成功。
 enum class Status {
     Ok,
-    ParamError,     // the parameter itself is invalid (null pointer, required field is 0, etc.)
-    Unsupported,    // hardware cannot do this configuration; never degrade, round, or substitute
-    NotFound,       // device or model not detected
-    HwError,        // low-level communication or driver failure
-    Timeout,        // wait timed out
-    ThreadClosed,   // threads closed or never started
+    ParamError,
+    Unsupported,    // No fallback, rounding, or substitution. 不降级、不取整、不替换。
+    NotFound,
+    HwError,        // Transport or driver failure. 通信或驱动故障。
+    Timeout,
+    ThreadClosed,   // Thread stopped or never started. 线程已停止或从未启动。
 };
 
-// ============================== Camera & output ==============================
-
-/**
- * Logical camera index, also the subscripts of the per-camera arrays.
- * @note These are logical roles fixed by the device wiring, not USB/I2C enumeration
- *       order, and the index identifies a camera only within one pipeline instance.
- */
+// Per-pipeline array indices follow the logical eye, not the I2C probe order.
+// 流水线数组下标按左右目区分，与 I2C 探测顺序无关。
 enum class CamIndex {
     Right = 0,
     Left  = 1,
     Num   = 2,
 };
 
-/** Processing pipeline selected for both cameras; the comment traces each stage. */
 enum class OutputMode {
-    Raw,      // CAM -> VIN -> ISP -> OUT
-    Resize,   // CAM -> VIN -> ISP -> VSE -> OUT
-    Rect,     // CAM -> VIN -> ISP -> GDC -> VSE -> OUT
+    Raw,      // NV12 at sensor dimensions. 传感器原生尺寸的 NV12。
+    Resize,
+    Rect,
 };
 
-/**
- * Platform pipeline configuration for one camera pair, already resolved for the
- * target board by the caller.
- *
- * The arrays are indexed by I2C bus number, not by CamIndex. Pointer values are
- * borrowed for the duration of Pipeline::init(); the configuration owns no memory.
- */
+// The caller resolves the configuration for the target board.
+// 调用方按目标板确定配置。
 struct PipelineConfig {
-    // Platform mapping: I2C bus -> MIPI RX / reset GPIO.
-    // Looked up by the bus the camera is detected on; buses may be swapped, so key by bus, not camera index.
-    // bus_mipi_rx 0xFF = not configured; bus_reset_gpio -1 = do not control.
+    // Key by detected I2C bus, not CamIndex: buses can be swapped.
+    // bus_mipi_rx: 0xFF = unconfigured; bus_reset_gpio: -1 = do not control.
+    // 总线可能互换；以实际探测到的 I2C 总线号为索引，不用 CamIndex。
+    // bus_mipi_rx：0xFF 表示未配置；bus_reset_gpio：-1 表示不控制。
     uint8_t bus_mipi_rx[32];
     int     bus_reset_gpio[32];
 
-    /** Sensor output size in pixels, i.e. the VIN/ISP input frame. */
+    // VIN/ISP input size in pixels. VIN/ISP 输入尺寸，单位为像素。
     uint32_t sensor_width, sensor_height;
 
-    /** Requested frame rate in frames per second; must match the sensor timing registers. */
+    // Frames per second; must match sensor timing. 单位为帧/秒，须与传感器时序一致。
     uint32_t fps;
     OutputMode mode;
 
-    /** Output size in pixels; required for Resize/Rect and equal to the sensor size in Raw. */
+    // Pixels; required for Resize/Rect, equal to sensor size in Raw.
+    // 单位为像素；Resize/Rect 模式必填，Raw 模式下等于传感器尺寸。
     uint32_t output_width;
     uint32_t output_height;
 
-    /** Sensor line and frame timing values passed directly to the platform driver. */
+    // Sensor timings passed unchanged to the driver. 传感器时序值原样传给驱动。
     uint32_t line_length;
     uint32_t frame_length;
 
-    const char *tuning_file;   // Borrowed ISP tuning path; nullptr disables loading.
+    // ISP tuning path borrowed during Pipeline::init(); nullptr skips loading.
+    // ISP 调优路径仅在 Pipeline::init() 期间借用；nullptr 表示不加载。
+    const char *tuning_file;
 };
 
-// ============================== IMU ==============================
-
 /**
- * One IMU sample as read back from the hardware FIFO, still in raw sensor units:
- * the driver performs no scaling, so the consumer converts with the configured
- * full-scale range and the model's sensitivity.
- *
- * Fields map onto the 16-byte ICM-family FIFO packet as read from the device
- * (big-endian on the wire, already converted to host byte order here):
- * bytes 1..12 are the signed big-endian accel/gyro words, byte 13 the temperature,
- * bytes 14..15 the header-dependent timestamp/delta word.
+ * Decoded 16-byte ICM FIFO packet. Wire layout: header at byte 0, big-endian
+ * accel/gyro words at bytes 1–12, temperature at 13, timestamp/delta at 14–15.
+ * Samples are in host byte order and unscaled; use the configured range and
+ * model-specific sensitivity. Accel and gyro use the sensor package axes.
+ * 解码后的 ICM 16 字节 FIFO 包。传输布局：第 0 字节为包头，1–12 为大端加速度和
+ * 角速度字，13 为温度，14–15 为时间戳/增量。采样值已转为主机字节序，未做换算；
+ * 换算需使用配置的量程和对应型号的灵敏度。加速度和角速度沿用传感器封装的轴向。
  */
 struct ImuHwFifo16Packet {
-    /** Signed raw accelerometer counts, axes in the order and sign of the sensor package. */
     int16_t  accel[3];
-    /** Signed raw gyroscope counts, same axis convention as accel. */
     int16_t  gyro[3];
-    /** Raw 8-bit temperature code; the scale factor is model-specific. */
     int8_t   temp;
-    /** True when the packet carried an FSYNC/timestamp header. */
+    // is_fsync marks an FSYNC-stamped packet. Only then is delta_time_us
+    // valid: the offset from the FSYNC edge to the sample, in microseconds.
+    // is_fsync 表示该包带有 FSYNC 标记；仅此时 delta_time_us 有效，
+    // 表示从 FSYNC 边沿到采样的时间差，单位为微秒。
     bool     is_fsync;
-    uint32_t delta_time_us;   // valid only when is_fsync: edge-to-sample offset
+    uint32_t delta_time_us;
 };
 
-/**
- * Requested IMU sampling configuration, passed through to the model driver.
- * The driver accepts the hardware encodings verbatim and rejects anything else with
- * Status::Unsupported instead of rounding or substituting a value.
- */
+// Supported values are model-specific (ModelDesc::info); others return Status::Unsupported.
+// 支持的取值因型号而异（见 ModelDesc::info）；其余取值返回 Status::Unsupported。
 struct ImuConfig {
-    /** Output data rate in Hz; supported values are model-specific (see ModelDesc::info). */
     uint32_t odr_hz;
-    /** Accelerometer full-scale range in g (1 g = 9.80665 m/s^2). */
-    uint16_t accel_fsr_g;
-    /** Gyroscope full-scale range in degrees per second. */
-    uint16_t gyro_fsr_dps;
-    uint8_t  bw_sel;   // shared accel/gyro UI filter selector; see ModelDesc::info
+    uint16_t accel_fsr_g;   // 1 g = 9.80665 m/s^2（标准重力加速度）
+    uint16_t gyro_fsr_dps;  // Degrees per second. 度/秒。
+    uint8_t  bw_sel;   // Shared accel/gyro UI filter selector. 加速度计和陀螺仪共用的 UI 滤波器选择值。
 };
 
-// ============================== Calibration ==============================
-
-/**
- * Distortion model that defines how CameraIntrinsics::dist_coeffs is read; the
- * coefficient order is the OpenCV one, and unused entries are zero.
- */
+// OpenCV dist_coeffs order; unused entries are zero.
+// dist_coeffs 按 OpenCV 顺序排列，未用的项为 0。
 enum class DistModel {
-    Pinhole,        // dist_coeffs = [k1,k2,p1,p2,k3,k4,k5,k6]
-    Fisheye,        // dist_coeffs = [k1,k2,k3,k4,0,0,0,0]
+    Pinhole,        // [k1,k2,p1,p2,k3,k4,k5,k6] 针孔模型
+    Fisheye,        // [k1,k2,k3,k4,0,0,0,0] 鱼眼模型
 };
 
 /**
- * Intrinsics of one camera.  Rectification rewrites these in place, see
- * base::stereo_rectify().
- *
- * All values are in pixels; the principal point is measured from the top-left corner
- * of the image, with x to the right and y downwards.
+ * fx, fy, cx, cy are in pixels; the origin is the upper-left, x right, y down.
+ * base::stereo_rectify() updates the intrinsics in place.
+ * fx、fy、cx、cy 的单位为像素；原点在左上角，x 向右，y 向下。
+ * base::stereo_rectify() 就地更新内参。
  */
 struct CameraIntrinsics {
     double fx, fy, cx, cy;
-    /** Intrinsic matrix, row-major; it is a duplicate of fx/fy/cx/cy with the last row (0,0,1). */
+    // K stores the same intrinsics in row-major order, with last row (0,0,1).
+    // K 按行主序存储同一份内参，最后一行为 (0,0,1)。
     double K[9], dist_coeffs[8];
-    /** Model used to interpret dist_coeffs; left and right cameras must agree. */
+    // Both cameras must use the same distortion model. 左右相机的畸变模型必须一致。
     DistModel dist_model = DistModel::Fisheye;
 };
 
-/**
- * IMU calibration and noise characteristics as stored in the EEPROM.
- * All three-element vectors are per-axis in sensor axis order, all 3x3 matrices are
- * row-major, and the units follow the field name.
- */
+// EEPROM calibration: vectors follow sensor axis order; 3x3 matrices are row-major.
+// EEPROM 标定数据：向量遵循传感器轴序，3x3 矩阵按行主序存储。
 struct ImuIntrinsics {
-    double accel_misalign[9];    // cross-axis coupling 3x3
+    double accel_misalign[9];    // Cross-axis coupling. 轴间耦合。
     double accel_scale[3];
     double accel_bias[3];
-    double accel_noise;          // m/s^2/sqrt(Hz)
-    double accel_random_walk;    // m/s^3/sqrt(Hz)
+    double accel_noise;          // m/s^2/sqrt(Hz) 加速度噪声密度
+    double accel_random_walk;    // m/s^3/sqrt(Hz) 加速度随机游走
     double gyro_misalign[9];
     double gyro_scale[3];
     double gyro_bias[3];
-    double gyro_noise;           // rad/s/sqrt(Hz)
-    double gyro_random_walk;     // rad/s^2/sqrt(Hz)
+    double gyro_noise;           // rad/s/sqrt(Hz) 角速度噪声密度
+    double gyro_random_walk;     // rad/s^2/sqrt(Hz) 角速度随机游走
 };
 
 /**
- * Full stereo + IMU calibration. The EEPROM model driver chooses the initial
- * reference frame and supplies all three absolute sensor poses in that frame.
- *
- * @note Each of the three extrinsic sets is a "sensor frame -> common reference
- *       frame" transform, i.e. p_ref = R * p_sensor + T, not a transform between
- *       devices.
- * @note The external API can re-express the same calibration against another device
- *       with dsc_convert_calibration(); that does not recompute the rectification.
+ * Each R/T maps its sensor frame into a common reference frame chosen by the
+ * EEPROM driver: p_ref = R * p_sensor + T. R is row-major.
+ * dsc_convert_calibration() changes the reference without re-rectifying.
+ * 每组 R/T 将各自的传感器坐标系变换到 EEPROM 驱动选定的公共参考系：
+ * p_ref = R * p_sensor + T。R 按行主序存储。
+ * dsc_convert_calibration() 可切换参考系，不重新做立体校正。
  */
 struct StereoImuModel {
     ImuIntrinsics    imu;
@@ -193,30 +159,26 @@ struct StereoImuModel {
     double cam_left_T[3];
     double imu_R[9];
     double imu_T[3];
-    /** Installation rotation in degrees, a multiple of 90; 0 for layouts without rotation. */
+    // Mounting rotation in degrees, a multiple of 90; 0 means no rotation.
+    // 安装旋转角，单位为度，取 90 的整数倍；0 表示不旋转。
     int    install_angle;
 };
 
-// ============================== Stereo rectification ==============================
-
 /**
- * Remap coordinate point: output pixel -> source-image sampling coordinate.
- *
- * The RDK X5 backend reinterprets this layout as the Horizon point_t type. No
- * compile-time layout assertion currently enforces that assumption, so both types
- * must remain two consecutive double values.
+ * For each output pixel, (x, y) is the source sampling position in pixels;
+ * fractional positions are allowed. Keep two consecutive doubles in x, y order:
+ * the RDK X5 backend reinterprets this layout as Horizon point_t.
+ * 对每个输出像素，(x, y) 是源图像的采样位置，单位为像素，可取小数。
+ * ABI 须保持按 x、y 排列的两个连续 double；RDK X5 后端将此布局当作 Horizon point_t 使用。
  */
 struct RemapPoint {
-    /** Source-image sampling position in pixels; values may be fractional. */
     double x, y;
 };
 
-// ============================== FIFO ==============================
-
-/** Policy applied by base::Fifo when the queue is full. */
+// Policy when base::Fifo is full. base::Fifo 队列满时的策略。
 enum class FifoMode {
-    DropNew,   // drop new data when full
-    DropOld,   // overwrite oldest data when full
+    DropNew,
+    DropOld,   // Overwrite the oldest entry. 覆盖最旧的数据。
 };
 
 } // namespace dsc

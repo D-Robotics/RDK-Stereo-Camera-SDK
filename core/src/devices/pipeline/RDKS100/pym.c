@@ -1,15 +1,8 @@
 /**
  * @file pym.c
- * @brief pym node: aspect-preserving crop + scaling.
- *
- * PYM is a pyramid scaler: an output slot names the layer it reads, the crop it takes
- * from that layer and the size it writes. pym_open() derives all three from the requested
- * output. An output smaller than the source is served from a reduced layer, because the
- * node rejects a region-to-output ratio of 2x or more.
- *
- * Buffer counts, handshaking flags and the blanking values follow the platform's S100
- * configuration for this sensor (hobot_mipi_cam,
- * src/s100/sensor/sc132gs_linear_1088x1280_raw10_30fps_1lane.c).
+ * Buffer counts, handshaking and blanking follow the SC132GS BSP preset:
+ * hobot_mipi_cam: src/s100/sensor/sc132gs_linear_1088x1280_raw10_30fps_1lane.c.
+ * 缓冲数量、握手和消隐参数沿用上述 SC132GS BSP 配置。
  *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
@@ -20,8 +13,8 @@
 
 #include <string.h>
 
-/* PYM strides are 16-byte aligned, the same alignment the platform's camera stack uses
- * for GDC and PYM (ALIGN_16 in hobot_mipi_cam). */
+/* PYM requires 16-byte strides, as in the BSP.
+ * PYM 的行跨度按 BSP 要求对齐到 16 字节。 */
 #define DSC_ALIGN_16(v) (((v) + 15u) & ~15u)
 
 #define DSC_PYM_BL_MAX_EN      5
@@ -31,13 +24,13 @@
 #define DSC_PYM_PREFIX_VB      2
 #define DSC_PYM_OUTPUT_BUF_NUM 6
 #define DSC_PYM_FB_BUF_NUM     2
-#define DSC_PYM_BUF_NUM        3   /* buffers the caller's output channel is given */
+#define DSC_PYM_BUF_NUM        3
 
-/* The base layer to read when the output is smaller than the source: the source halved,
- * quartered, ... down to a sixteenth, each rounded down to an even size, smallest that still
- * covers the output. Selector 0 is the full-resolution layer; selector 1 the reduced ones,
- * its layer index counting from zero at half resolution, so a `depth`-halving output is
- * selector 1 with layer `depth - 1`. Writes bl_w/bl_h and sel/layer. */
+/* PYM rejects a region-to-output ratio of 2x or more. Try up to four
+ * halvings, rounding each layer down to even dimensions. Selector 0 reads
+ * full resolution; selector 1 starts at layer 0 (half resolution).
+ * 裁剪区域与输出的尺寸比达到 2 倍时，PYM 会拒绝配置。最多逐级减半四次，
+ * 每层尺寸向下取偶数。选择器 0 读全分辨率，选择器 1 从第 0 层（半分辨率）起。 */
 static void pym_layer_pick(uint32_t in_w, uint32_t in_h,
                            uint32_t out_w, uint32_t out_h,
                            uint32_t *bl_w, uint32_t *bl_h,
@@ -85,10 +78,8 @@ int roi_ratio_exact(uint32_t in_w, uint32_t in_h,
                     uint32_t out_w, uint32_t out_h)
 {
     if (in_w * out_h > out_w * in_h) {
-        // input is relatively wider: crop left/right, roi.w = in_h * out_w / out_h
         return (in_h * out_w % out_h == 0) ? 0 : -1;
     }
-    // crop top/bottom, roi.h = in_w * out_h / out_w
     return (in_w * out_h % out_w == 0) ? 0 : -1;
 }
 
@@ -97,13 +88,11 @@ dsc_rect_t aspect_roi(uint32_t in_w, uint32_t in_h,
 {
     dsc_rect_t roi;
     if (in_w * out_h > out_w * in_h) {
-        // input is relatively wider: crop left/right
         roi.h = in_h;
         roi.w = in_h * out_w / out_h;
         roi.x = (in_w - roi.w) / 2;
         roi.y = 0;
     } else {
-        // crop top/bottom
         roi.w = in_w;
         roi.h = in_w * out_h / out_w;
         roi.x = 0;
@@ -117,14 +106,12 @@ int pym_open(hbn_vnode_handle_t *pym, uint32_t in_w, uint32_t in_h,
 {
     pym_cfg_t cfg = { 0 };
 
-    /* Node identity. M2M accepts an upstream DDR-backed frame from ISP or GDC and still
-       participates in the same vflow through a direct vnode bind; it does not imply a
-       CPU getframe/sendframe bridge. */
+    /* M2M accepts ISP or GDC DDR output through a direct bind, without a CPU bridge.
+     * M2M 可以直接绑定 ISP 或 GDC 的 DDR 输出，无需 CPU 搬运。 */
     cfg.hw_id    = hw_id;
     cfg.slot_id  = slot_id;
     cfg.pym_mode = PYM_M2M_MODE;
 
-    /* Buffer counts and handshaking, as in the platform's S100 configuration. */
     cfg.pingpong_ring        = 0;
     cfg.output_buf_num       = DSC_PYM_OUTPUT_BUF_NUM;
     cfg.fb_buf_num           = DSC_PYM_FB_BUF_NUM;
@@ -137,8 +124,6 @@ int pym_open(hbn_vnode_handle_t *pym, uint32_t in_w, uint32_t in_h,
     cfg.in_buf_noclean       = 1;
     cfg.in_buf_noncached     = 0;
 
-    /* Input geometry: the full frame handed over by the ISP or GDC, NV12, 16-byte
-       aligned strides. */
     cfg.chn_ctrl.invalid_head_lines  = 0;
     cfg.chn_ctrl.src_in_width        = in_w;
     cfg.chn_ctrl.src_in_height       = in_h;
@@ -151,8 +136,6 @@ int pym_open(hbn_vnode_handle_t *pym, uint32_t in_w, uint32_t in_h,
     cfg.chn_ctrl.bl_max_layer_en     = DSC_PYM_BL_MAX_EN;
     cfg.chn_ctrl.ds_roi_uv_bypass    = 0;
 
-    /* One output: ds_roi_sel and ds_roi_layer pick the base layer, start_* and region_*
-     * the crop inside it, out_* the written size. The region has to fit the layer. */
     pym_plan_t plan;
     pym_plan(in_w, in_h, out_w, out_h, &plan);
     cfg.chn_ctrl.ds_roi_sel[0]   = (uint8_t)plan.sel;
@@ -160,11 +143,10 @@ int pym_open(hbn_vnode_handle_t *pym, uint32_t in_w, uint32_t in_h,
     cfg.chn_ctrl.ds_roi_en       = (uint8_t)(1u << 0);
 
     roi_box_t *box = &cfg.chn_ctrl.ds_roi_info[0];
-    /* The region is the CROP, expressed inside the named layer, and the node checks
-       start + region <= layer size. Naming the whole layer here while also naming a crop
-       offset puts the region past the end of the layer and the configuration is rejected;
-       both the offset and the size therefore scale from source coordinates into the layer,
-       which for the full-resolution layer is the identity. */
+    /* ROI offsets and sizes are in layer coordinates. The driver checks
+     * start + region <= layer size, so a full-layer region cannot also have an offset.
+     * ROI 的偏移和尺寸均以选中层为基准。驱动检查 start + region <= 层尺寸，
+     * 所以裁剪区域若占满整层，偏移必须为 0。 */
     box->start_left    = (uint16_t)plan.start_left;
     box->start_top     = (uint16_t)plan.start_top;
     box->region_width  = (uint16_t)plan.region_w;
@@ -175,13 +157,9 @@ int pym_open(hbn_vnode_handle_t *pym, uint32_t in_w, uint32_t in_h,
     box->wstride_uv    = DSC_ALIGN_16(out_w);
     box->vstride       = out_h;
 
-    /*
-     * Slots 1.. are not enabled in ds_roi_en, and the node's attribute check walks the
-     * enabled slots only, so these entries are never inspected; they are filled with the
-     * reduced-layer selectors because the kernel copies the whole structure, and a slot
-     * that was ever enabled on top of this configuration must read a pyramid layer rather
-     * than the full-resolution one with no region described.
-     */
+    /* The driver validates only enabled slots, but copies the whole config.
+     * Preset the unused slots to reduced layers.
+     * 驱动只校验已启用的槽位，但会复制整份配置。未用槽位预设为降采样层。 */
     for (uint32_t i = 1; i < MAX_DS_NUM; i++) {
         cfg.chn_ctrl.ds_roi_sel[i]   = 1;
         cfg.chn_ctrl.ds_roi_layer[i] = (uint8_t)(i - 1);
@@ -193,11 +171,6 @@ int pym_open(hbn_vnode_handle_t *pym, uint32_t in_w, uint32_t in_h,
         *pym = 0;
         return -1;
     }
-    /*
-     * PYM takes one configuration structure for the node attribute, the input channel
-     * and the output channel; the platform camera stack passes the same pym_cfg_t to all
-     * three.
-     */
     if (hbn_vnode_set_attr(*pym, &cfg) != 0 ||
         hbn_vnode_set_ichn_attr(*pym, 0, &cfg) != 0 ||
         hbn_vnode_set_ochn_attr(*pym, 0, &cfg) != 0)

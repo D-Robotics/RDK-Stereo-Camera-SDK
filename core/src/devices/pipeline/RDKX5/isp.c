@@ -1,6 +1,5 @@
 /**
  * @file isp.c
- * @brief isp node: offline (DDR) ISP, NV12 output.
  *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
@@ -14,21 +13,21 @@
 int isp_open(hbn_vnode_handle_t *isp, uint32_t width, uint32_t height)
 {
     isp_attr_t attr = {
-        .input_mode = DDR_MODE,      /* offline (DDR): the ISP reads the frames VIN wrote */
-        .sensor_mode = ISP_NORMAL_M, /* non-HDR sensor mode */
-        .crop = { .x = 0, .y = 0, .w = width, .h = height },   /* full frame, in pixels */
+        .input_mode = DDR_MODE,
+        .sensor_mode = ISP_NORMAL_M, /* Non-HDR sensor mode. 传感器采用非 HDR 模式。 */
+        .crop = { .x = 0, .y = 0, .w = width, .h = height },
     };
 
     isp_ichn_attr_t ichn = {
-        .width = width,              /* input frame size in pixels */
+        .width = width,
         .height = height,
-        .fmt = FRM_FMT_RAW,          /* RAW10 input, matching VIN and camera.c */
+        .fmt = FRM_FMT_RAW,
         .bit_width = 10,
     };
 
     isp_ochn_attr_t ochn = {
-        .ddr_en = CAM_TRUE,          /* output is written to DDR */
-        .fmt = FRM_FMT_NV12,         /* NV12 out, 8 bit per component */
+        .ddr_en = CAM_TRUE,
+        .fmt = FRM_FMT_NV12,
         .bit_width = 8,
     };
 
@@ -42,7 +41,7 @@ int isp_open(hbn_vnode_handle_t *isp, uint32_t width, uint32_t height)
         return -1;
 
     hbn_buf_alloc_attr_t alloc = {
-        .buffers_num = 5,        /* driver-held output buffers for the ISP main frame */
+        .buffers_num = 5,        /* Driver-owned main-frame buffers. 主帧缓冲区归驱动管理。 */
         .is_contig = 1,
         .flags = HB_MEM_USAGE_CPU_READ_OFTEN |
                  HB_MEM_USAGE_CPU_WRITE_OFTEN |

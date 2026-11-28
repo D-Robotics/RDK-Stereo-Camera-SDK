@@ -1,6 +1,7 @@
 /**
  * @file dsc-imu-info.c
  * @brief Probe the IMU and print its model and details
+ * @brief 探测 IMU 并打印其型号与详细信息
  *
  * usage: dsc-imu-info <device> <mode> <width> <height> <fps> <odr>
  *
@@ -12,33 +13,6 @@
  *   <height>  output height in pixels
  *   <fps>     camera frame rate
  *   <odr>     IMU output data rate in Hz
- *
- *   Normally not called directly: 'imu-info' inside `dstereo-cam shell` passes the
- *   device config locked by the shell in exactly this order. 'imu-info --help'
- *   is answered by the shell, which prints its usage and never starts this
- *   program; outside the shell "--help" would be read as a device name.
- *
- * output: on stdout, the model line followed by the detail block
- *
- *   imu name: <model>
- *   <info>
- *
- *   or a single line when no IMU was detected:
- *
- *   no IMU detected
- *
- *   <info> is whatever dsc_get_imu_info() returns; a NULL detail block prints
- *   as an empty line, and a model name without details prints the name alone.
- *
- * exit status:
- *   0  a model name was reported, or no IMU was detected
- *   1  fewer than six arguments, or dsc_init() failed
- *
- * error reporting: this program prints plain, unprefixed diagnostics on stderr
- * ("init failed"), so a failure that happens in here does not carry the
- * 'dsc-...: <reason>' / try '--help' contract the shell script follows.
- * The same is true of the other sample programs, and of '--help' and argument
- * validation: those live in the dstereo-cam script, not in the samples.
  *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.

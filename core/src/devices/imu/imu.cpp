@@ -1,6 +1,7 @@
 /**
  * @file imu.cpp
  * @brief IMU model registry table and probe loop.
+ * @brief IMU 型号注册表与探测循环。
  *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
@@ -18,9 +19,10 @@ namespace {
 
 // Auto-populated model registry: each model file self-registers via
 // DSC_IMU_REGISTER_MODEL at static-init time.
+// 自动填充的型号注册表：每个型号文件在静态初始化阶段通过 DSC_IMU_REGISTER_MODEL 自行注册。
 std::vector<const ModelDesc *> &registry()
 {
-    static std::vector<const ModelDesc *> r;   // function-local static: safe init order
+    static std::vector<const ModelDesc *> r;   // function-local static: safe init order 函数内静态变量：初始化顺序安全
     return r;
 }
 

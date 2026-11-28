@@ -1,6 +1,5 @@
 /**
  * @file vse.c
- * @brief vse node: aspect-preserving crop + scaling.
  *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
@@ -15,10 +14,8 @@ int roi_ratio_exact(uint32_t in_w, uint32_t in_h,
                     uint32_t out_w, uint32_t out_h)
 {
     if (in_w * out_h > out_w * in_h) {
-        // input is relatively wider: crop left/right, roi.w = in_h * out_w / out_h
         return (in_h * out_w % out_h == 0) ? 0 : -1;
     }
-    // crop top/bottom, roi.h = in_w * out_h / out_w
     return (in_w * out_h % out_w == 0) ? 0 : -1;
 }
 
@@ -27,13 +24,11 @@ common_rect_t aspect_roi(uint32_t in_w, uint32_t in_h,
 {
     common_rect_t roi;
     if (in_w * out_h > out_w * in_h) {
-        // input is relatively wider: crop left/right
         roi.h = in_h;
         roi.w = in_h * out_w / out_h;
         roi.x = (in_w - roi.w) / 2;
         roi.y = 0;
     } else {
-        // crop top/bottom
         roi.w = in_w;
         roi.h = in_w * out_h / out_w;
         roi.x = 0;

@@ -1,13 +1,10 @@
 /**
  * @file dsc-detect-camera.cpp
- * @brief Scan I2C buses x addresses for an SC132GS camera sensor.
+ * @brief Detect SC132GS sensors on I2C.
+ * @brief 在 I2C 总线上探测 SC132GS 传感器。
  *
- * Internal bring-up tool, dispatched by the @c dstereo-cam script as
- * @c "dstereo-cam detect camera": every (bus, address) probe point prints exactly one
- * result line (the chip id on a hit), so the output also shows where nothing
- * answered or where the bus itself could not be opened.
- *
- * Usage: dstereo-cam detect camera [-b <bus...>]
+ * Usage: dsc detect camera [-b <bus...>]
+ * 用法：dsc detect camera [-b <bus...>]
  *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
@@ -23,35 +20,22 @@
 
 using namespace dsc;
 
-// SC132GS sensor chip identification: the register and value the pipeline probes with
-// (see Pipeline::Pipeline), read back as a 16-bit big-endian register value
+// Keep the chip ID register and value in sync with the pipeline probe.
+// 芯片 ID 寄存器和期望值须与流水线探测逻辑一致。
 static constexpr uint16_t kChipIdReg = 0x3107;
 static constexpr uint16_t kChipId    = 0x0132;
 
-/**
- * @brief Parse one command-line integer argument.
- *
- * @param[in]  s   Text to parse.
- * @param[out] out Receives the parsed value.
- * @return true when @p s was consumed completely.
- */
 static bool parse_int(const char *s, int *out)
 {
     char *end = nullptr;
-    long v = strtol(s, &end, 0);   // base 0: decimal, 0x-hex, 0-octal
+    long v = strtol(s, &end, 0);   // base 0: decimal, 0x-hex, 0-octal 进制 0：十进制、0x 十六进制、0 八进制
     if(end == s || *end != '\0')return false;
     *out = (int)v;
     return true;
 }
 
-/**
- * @brief Probe every requested (bus, address) pair, one result line per point.
- *
- * @param[in] argc,argv Optional @c -b <bus...>; the addresses are fixed to the
- *                      SC132GS addresses used by the SDK presets.
- * @return 0 when the scan completed (also when no sensor was found), 1 on a usage
- *         or argument error.
- */
+// Exit 0 means the scan completed, not that a sensor was found.
+// 返回 0 只表示扫描完成，不代表找到了传感器。
 int main(int argc, char **argv)
 {
     std::vector<int> buses;

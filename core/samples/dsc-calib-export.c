@@ -1,6 +1,7 @@
 /**
  * @file dsc-calib-export.c
  * @brief Export the EEPROM calibration as Kalibr YAML
+ * @brief 将 EEPROM 标定导出为 Kalibr YAML
  *
  * usage: dsc-calib-export <dir> <device> <mode> <width> <height> <fps> <odr>
  *
@@ -13,39 +14,6 @@
  *   <height>  output height in pixels
  *   <fps>     camera frame rate
  *   <odr>     IMU output data rate in Hz
- *
- *   Normally not called directly: 'calib-export <dir>' inside `dstereo-cam shell`
- *   passes the device config locked by the shell in exactly this order.
- *
- * output: both the YAML text on stdout and one file per document in <dir>
- *
- *   <dir>/camchain.yaml   camera intrinsics, plus the T_cam_imu and T_cn_cnm1
- *                         extrinsics when an IMU is present. Its header states the
- *                         direction of T_cam_imu (IMU to camera) and that a consumer
- *                         expecting T_imu_cam has to invert it.
- *   <dir>/imu.yaml        IMU noise and intrinsics; written only when an IMU is
- *                         present (update_rate is the <odr> argument)
- *
- *   The IMU documents are written only when the device reports an IMU. When the
- *   configuration expects one and the device reports none -- another process holding
- *   the device is enough -- both are omitted, and the omission is reported on stderr
- *   and as a comment inside camchain.yaml, so a camera-only export cannot be taken
- *   for a complete one.
- *
- *   raw mode exports the EEPROM's real calibration. Any other mode exports the
- *   calibration of that pipeline and prints a warning on stderr saying so, since
- *   rect replaces the camera poses with virtual parallel-stereo ones.
- *
- * exit status: 0 on success, 1 for fewer than eight arguments, or a failed
- * dsc_init() or dsc_get_calibration(), or running out of memory while building a
- * document. A write failure is not reported: a <dir> that cannot be created or written
- * only leaves the files missing, and the YAML already went to stdout.
- *
- * error reporting: this program prints plain, unprefixed diagnostics on stderr
- * ("init failed", "get_calibration failed"), so a failure that happens in here
- * does not carry the 'dsc-...: <reason>' / try '--help' contract the shell
- * script follows. The same is true of the other sample programs, and of '--help'
- * and argument validation: those live in the dstereo-cam script, not in the samples.
  *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
@@ -78,9 +46,11 @@ int main(int argc, char **argv)
         argv[2], mode, atoi(argv[4]), atoi(argv[5]), atoi(argv[6]), atoi(argv[7]));
 
     /* Create Device Handle */
+    /* 创建设备句柄 */
     dsc_device_t *dev = dsc_create();
 
     /* Init Device */
+    /* 初始化设备 */
     int ret = 0;
     if(dsc_init(dev, &cfg) != DSC_OK){
         fprintf(stderr, "init failed\n");
@@ -94,6 +64,7 @@ int main(int argc, char **argv)
     }
 
     /* Get stereo (and IMU) calibration data */
+    /* 获取立体（以及 IMU）标定数据 */
     if(strcmp(argv[3], "raw") != 0){
         fprintf(stderr, "\033[33mwarning: mode is \"%s\", not \"raw\" -- the exported calibration is the "
             "rectified/resized one, not the EEPROM's raw calibration\033[0m\n", argv[3]);
@@ -101,9 +72,13 @@ int main(int argc, char **argv)
     /* Probe the IMU once and reuse the answer for both documents. Two probes can disagree
        while another process holds the device, and that dropped T_cam_imu or imu.yaml
        without a word. */
+    /* IMU 只探测一次，两份文档复用同一结果。在另一个进程占用设备时，两次探测
+       可能给出不同结果，而那样会悄无声息地丢掉 T_cam_imu 或 imu.yaml。 */
     const bool has_imu = dsc_get_imu_name(dev) != NULL;
     /* The caller's configuration says whether this module is supposed to have one, which is
        what separates "no IMU on this module" from "the probe failed". */
+    /* 调用方的配置说明本模块是否应当带有 IMU，这正是区分"该模块没有 IMU"与
+       "探测失败"的依据。 */
     const bool imu_missing = !has_imu && cfg.imu_config.bus_num > 0;
     if(imu_missing){
         fprintf(stderr, "warning: %s configures an IMU but the device reported none -- "
@@ -123,6 +98,7 @@ int main(int argc, char **argv)
     save_yaml(argv[1], "camchain.yaml", camchain);
 
     /* Get IMU intrinsics and save */
+    /* 获取 IMU 内参并保存 */
     if(has_imu){
         char *imu = imu_yaml(&cal, atoi(argv[7]));
         if(imu == NULL){
@@ -160,6 +136,7 @@ static char *camchain_yaml(dsc_device_t *dev, const dsc_calibration_t *cal,
 
     for(int i = 0; i < 2; i++){
         /* Kalibr's usual convention: cam0 is the left camera and cam1 the right. */
+        /* Kalibr 的常见约定：cam0 是左相机，cam1 是右相机。 */
         const dsc_camera_intrinsics_t *ci = i ? &cal->camera_right : &cal->camera_left;
         const dsc_reference_frame_t ref = i ? DSC_REF_CAMERA_RIGHT : DSC_REF_CAMERA_LEFT;
         double R[9], T[3];
@@ -169,6 +146,7 @@ static char *camchain_yaml(dsc_device_t *dev, const dsc_calibration_t *cal,
         fprintf(f, "  distortion_model: %s\n",
                 (ci->dist_model == DSC_DIST_FISHEYE) ? "equidistant" : "radtan");
         /* Kalibr takes 4 coefficients: radtan=[k1,k2,p1,p2], equidistant=[k1,k2,k3,k4] */
+        /* Kalibr 取 4 个系数：radtan=[k1,k2,p1,p2]，equidistant=[k1,k2,k3,k4] */
         fprintf(f, "  distortion_coeffs: [%.12g, %.12g, %.12g, %.12g]\n",
                 ci->dist_coeffs[0], ci->dist_coeffs[1], ci->dist_coeffs[2], ci->dist_coeffs[3]);
         fprintf(f, "  intrinsics: [%.12g, %.12g, %.12g, %.12g]\n", ci->fx, ci->fy, ci->cx, ci->cy);
@@ -186,6 +164,7 @@ static char *camchain_yaml(dsc_device_t *dev, const dsc_calibration_t *cal,
         }
         if(i){
             /* cam1 (right) from cam0 (left): the usual Kalibr left-to-right chain. */
+            /* cam1（右）相对 cam0（左）：Kalibr 常见的从左到右链。 */
             dsc_get_relative_R(dev, DSC_REF_CAMERA_LEFT, DSC_REF_CAMERA_RIGHT, R);
             dsc_get_relative_T(dev, DSC_REF_CAMERA_LEFT, DSC_REF_CAMERA_RIGHT, T);
             fprintf(f, "  T_cn_cnm1:\n");

@@ -1,6 +1,7 @@
 /**
  * @file dsc-run.c
  * @brief Stream the camera and the IMU and print the newest data of each
+ * @brief 流式采集相机与 IMU 数据，并打印各自最新的数据
  *
  * usage: dsc-run <device> <mode> <width> <height> <fps> <odr>
  *
@@ -12,38 +13,6 @@
  *   <height>  output height in pixels
  *   <fps>     camera frame rate
  *   <odr>     IMU output data rate in Hz
- *
- *   Normally not called directly: 'run' inside `dstereo-cam shell` passes the device
- *   config locked by the shell in exactly this order. Runs until SIGINT
- *   (Ctrl-C), which stops capture and exits cleanly; it records nothing.
- *
- * output: on stdout, a dashed separator followed by two lines, refreshed at most
- * every PRINT_US (20 ms, i.e. 50 times per second):
- *
- *   ------------------------------------------------------------------
- *   Camera  [ID: <index> | fps: <rate> | Left timestamp: <s> s | Right timestamp: <s> s]
- *   IMU     [ID: <index> | odr: <rate> Hz | Timestamp: <s> s | Accel <x> <y> <z> m/s^2 | Gyro <x> <y> <z> rad/s | Temp <t> C]
- *
- *   The '------' line above is as wide as the longer of the two lines, so its
- *   length follows the numbers; the two field layouts are exactly as shown.
- *   <index> is 0-based and counts what the stream produced since startup, so it
- *   keeps growing and restarts at 0 on the next run. <rate> is the average over
- *   the last CAM_WINDOW frames / IMU_WINDOW packets and prints as a right-aligned
- *   "--" until that many have arrived. Each <s> is a timestamp_ns converted to
- *   seconds with 6 decimals (divided by 1e9): the capture/sample time on the
- *   camera clock, not seconds since this program started. Accel is m/s^2, gyro
- *   rad/s, temp degrees Celsius, and every number is printed signed (accel and
- *   temp with two and one decimals, gyro with three). Before the first frame or
- *   packet the respective line reads "Camera  [no frame yet]" / "IMU     [no
- *   packet yet]".
- *
- * exit status: 0 after Ctrl-C, 1 when dsc_init() or dsc_start() failed.
- *
- * error reporting: this program prints plain, unprefixed diagnostics on stderr
- * ("init/start failed"), so a failure that happens in here does not carry the
- * 'dsc-...: <reason>' / try '--help' contract the shell script follows. The
- * same is true of the other sample programs, and of '--help' and argument
- * validation: those live in the dstereo-cam script, not in the samples.
  *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
@@ -87,9 +56,11 @@ int main(int argc, char **argv)
         argv[1], mode, atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), atoi(argv[6]));
 
     /* Create Device Handle */
+    /* 创建设备句柄 */
     dsc_device_t *dev = dsc_create();
 
     /* Init Device and Start DataFlow */
+    /* 初始化设备并启动数据流 */
     int ret = 0;
     if(dsc_init(dev, &cfg) != DSC_OK || dsc_start(dev) != DSC_OK){
         fprintf(stderr, "init/start failed\n");
@@ -102,6 +73,7 @@ int main(int argc, char **argv)
     uint64_t cam_idx = 0, imu_idx = 0;
 
     /* Get data */
+    /* 获取数据 */
     while(!stop){
         dsc_image_nv12_t left_image, right_image;
         while(dsc_get_nv12_frame(dev, &left_image, &right_image) == DSC_OK){
@@ -109,7 +81,7 @@ int main(int argc, char **argv)
             timestamp_left = left_image.timestamp_ns;
             timestamp_right = right_image.timestamp_ns;
             cam_idx++;
-            free(left_image.data), free(right_image.data);   /* the buffer is ours to free */
+            free(left_image.data), free(right_image.data);   /* the buffer is ours to free 缓冲区由我们释放 */
         }
         dsc_imu_packet_t p;
         while(dsc_get_imu_packet(dev, &p) == DSC_OK){
@@ -173,6 +145,7 @@ static void print_block(uint64_t cam_idx, uint64_t imu_idx, double fps, double o
     if(next_print <= now)next_print = now + PRINT_US;
 
     /* both rates need a full window, so they stay "--" until it has filled */
+    /* 两个速率都需要攒满一个窗口，因此在窗口填满之前一直显示 "--" */
     char fps_s[16] = "    --", odr_s[16] = "    --";
     if(cam_idx >= CAM_WINDOW)snprintf(fps_s, sizeof(fps_s), "%6.2f", fps);
     if(imu_idx >= IMU_WINDOW)snprintf(odr_s, sizeof(odr_s), "%6.2f", odr);

@@ -1,13 +1,10 @@
 /**
  * @file dsc-detect-imu.cpp
- * @brief Scan I2C buses x addresses for a known IMU.
+ * @brief Detect registered IMU models at I2C address 0x68.
+ * @brief 在 I2C 地址 0x68 探测已注册的 IMU 型号。
  *
- * Internal bring-up tool, dispatched by the @c dstereo-cam script as
- * @c "dstereo-cam detect imu": every (bus, address) probe point prints exactly one
- * result line (model name plus its details on a hit), so the output also shows
- * where an unknown device answered and where nothing answered at all.
- *
- * Usage: dstereo-cam detect imu [-b <bus...>]
+ * Usage: dsc detect imu [-b <bus...>]
+ * 用法：dsc detect imu [-b <bus...>]
  *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
@@ -24,23 +21,15 @@
 
 using namespace dsc;
 
-/**
- * @brief Parse one command-line integer argument.
- *
- * @param[in]  s   Text to parse.
- * @param[out] out Receives the parsed value.
- * @return true when @p s was consumed completely.
- */
 static bool parse_int(const char *s, int *out)
 {
     char *end = nullptr;
-    long v = strtol(s, &end, 0);   // base 0: decimal, 0x-hex, 0-octal
+    long v = strtol(s, &end, 0);   // base 0: decimal, 0x-hex, 0-octal 进制 0：十进制、0x 十六进制、0 八进制
     if(end == s || *end != '\0')return false;
     *out = (int)v;
     return true;
 }
 
-// print a (possibly multi-line) string, indenting every line under the result column
 static void print_block(const char *indent, const char *text)
 {
     if(!text)return;
@@ -53,13 +42,8 @@ static void print_block(const char *indent, const char *text)
     }
 }
 
-/**
- * @brief Probe every requested (bus, address) pair, one result line per point.
- *
- * @param[in] argc,argv Optional @c -b <bus...>; the address is fixed to 0x68.
- * @return 0 when the scan completed (also when no IMU was found), 1 on a usage
- *         or argument error.
- */
+// Exit 0 means the scan completed, not that an IMU was found.
+// 返回 0 只表示扫描完成，不代表找到了 IMU。
 int main(int argc, char **argv)
 {
     std::vector<int> buses;
@@ -85,7 +69,6 @@ int main(int argc, char **argv)
 
     int n_found = 0, n_unknown = 0, n_empty = 0, n_buserr = 0;
     for(int b : buses){
-        // bus-open sanity: if the first open fails, the bus node is missing
         base::I2cDevice probe((uint8_t)b, (uint8_t)addrs.front());
         if(!probe){
             printf(" %3d  --      bus open failed\n", b);
@@ -93,14 +76,14 @@ int main(int argc, char **argv)
             continue;
         }
         for(int a : addrs){
-            // constructor probes the auto-registered model table on this bus/addr
             imu::Imu imu((uint8_t)b, (uint8_t)a);
             if(imu){
                 printf(" %3d  0x%02x   %s\n", b, a, imu.name());
                 print_block("                ", imu.info());
                 n_found++;
             } else {
-                // not a known IMU: distinguish "something answers" from "nothing there"
+                // A successful fallback read shows a response, not an IMU identification.
+                // 兜底读取成功只说明有应答，不能确认设备是 IMU。
                 base::I2cDevice d((uint8_t)b, (uint8_t)a);
                 uint8_t v;
                 if(d && d.read(0x00, &v) == Status::Ok){
