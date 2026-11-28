@@ -1,15 +1,5 @@
 /**
  * @file vin.c
- * @brief vin node: MIPI capture (CIM) plus the LPWM exposure trigger.
- *
- * The LPWM channels share one frame period and one pulse shape, so both eyes are
- * triggered in lockstep. That period is also the master time base of the SDK's IMU
- * FSYNC tracker (see src/dsc.cpp), which is why it is derived from the configured
- * frame rate rather than passed in by the caller.
- *
- * The function contract (parameters, units, ownership, return value) is documented
- * with the declaration in RDKS100.h.
- *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
  * SPDX-License-Identifier: MIT
@@ -21,26 +11,29 @@
 
 #define DSC_VIN_RAW10 0x2B
 
-/* VCON buses, from the platform's S100 config for this sensor; the stack does not derive
- * them from the device tree, so they are stated here. */
+/* VCON bus IDs come from the BSP sensor table, not the device tree.
+ * VCON 总线编号取自 BSP 传感器表，不从设备树读取。 */
 #define DSC_VIN_VCON_BUS_MAIN   2
 #define DSC_VIN_VCON_BUS_SECOND 2
 
-/* Number of driver-held capture buffers for the VIN output; the platform's S100
- * configuration uses 6 for this sensor. */
+/* The S100 BSP uses six driver-owned capture buffers for this sensor.
+ * 此传感器沿用 BSP 的六个采集缓冲区，由驱动持有。 */
 #define DSC_VIN_BUF_NUM 6
 
-/* Bytes per line of the RAW10 output, aligned to the 32-byte plane boundary the ISP also
- * uses; it refuses the bind when the two strides disagree. 1088 -> 1360 -> 1376. */
+/* VIN and ISP must agree on the packed RAW10 stride: round up to 32 bytes
+ * (e.g. 1088 pixels -> 1360 packed bytes -> 1376 bytes per row).
+ * VIN 和 ISP 的 RAW10 行跨度必须一致：按 32 字节向上对齐
+ * （例如 1088 像素打包后为 1360 字节，对齐后为 1376 字节）。 */
 #define DSC_VIN_WSTRIDE_ALIGN 32U
 
 int vin_open(hbn_vnode_handle_t *vin, int mipi_rx,
              uint32_t width, uint32_t height, uint32_t fps)
 {
-    /* LPWM frame timing.  period holds pulse_period - 1 and the offset centres the
-       1 ms high pulse inside the frame window, so the software trigger that restarts the
-       waveform once per second never coincides with a pulse edge and exactly fps pulses
-       are emitted per second. */
+    /* Center the 1 ms pulse in the frame window and account for the division
+     * remainder so the one-second retrigger falls between pulses. The driver
+     * encodes the period as N - 1 and the phase as N + 1, in microseconds.
+     * 将 1 ms 脉冲放在帧窗口中央，并补上整除余数，让每秒一次的重触发落在脉冲之间。
+     * 驱动的周期填 N - 1，相位填 N + 1，单位为微秒。 */
     const uint32_t pulse_period_us = 1000000U / fps;
     const uint32_t high_us = 1000U;
     const uint32_t remainder_us = 1000000U - pulse_period_us * fps;
@@ -48,36 +41,36 @@ int vin_open(hbn_vnode_handle_t *vin, int mipi_rx,
     const uint32_t period_us = pulse_period_us - 1U;
     const uint32_t offset_us = phase_us + 1U;
 
-    /* Packed RAW10 line, then rounded up to the plane alignment the ISP checks against. */
     const uint32_t ochn_wstride =
         (((width * 10U / 8U) + DSC_VIN_WSTRIDE_ALIGN - 1U) / DSC_VIN_WSTRIDE_ALIGN)
         * DSC_VIN_WSTRIDE_ALIGN;
 
     vin_attr_t attr = { 0 };
 
-    /* Which MIPI/virtual-connection bus this sensor sits on. */
     attr.vin_node_attr.vcon_attr.bus_main   = DSC_VIN_VCON_BUS_MAIN;
     attr.vin_node_attr.vcon_attr.bus_second = DSC_VIN_VCON_BUS_SECOND;
 
-    /* flyby = 0: VIN writes to DDR and the ISP reads from there. */
+    /* Use DDR for VIN -> ISP; do not enable flyby.
+     * VIN 经 DDR 向 ISP 送帧，不走 flyby。 */
     attr.vin_node_attr.cim_attr.mipi_en       = 1;
     attr.vin_node_attr.cim_attr.cim_isp_flyby = 0;
     attr.vin_node_attr.cim_attr.cim_pym_flyby = 0;
     attr.vin_node_attr.cim_attr.mipi_rx       = (uint32_t)mipi_rx;
-    attr.vin_node_attr.cim_attr.vc_index      = 0;   /* virtual channel, matching camera.c */
+    attr.vin_node_attr.cim_attr.vc_index      = 0;   /* Must match camera.c.
+                                                      * 须与 camera.c 一致。 */
     attr.vin_node_attr.cim_attr.ipi_channels  = 1;
-    attr.vin_node_attr.cim_attr.y_uv_swap     = 0;   /* RAW10: no luma/chroma swap */
+    attr.vin_node_attr.cim_attr.y_uv_swap     = 0;
 
     attr.vin_node_attr.cim_attr.func.enable_frame_id   = 1;
     attr.vin_node_attr.cim_attr.func.set_init_frame_id = 0;
-    attr.vin_node_attr.cim_attr.func.enable_pattern    = 0;   /* test pattern off */
+    attr.vin_node_attr.cim_attr.func.enable_pattern    = 0;
 
     attr.vin_node_attr.cim_attr.rdma_input.rdma_en = 0;
 
     attr.vin_node_attr.magicNumber = DSC_S100_MAGIC_NUMBER;
 
-    /* LPWM exposure trigger: all four channels use the same period and the same raw
-       driver offset/duty values, so their outputs share one time base. */
+    /* Use identical LPWM timing for both eyes; this period also drives IMU FSYNC.
+     * 双目共用 LPWM 时序；IMU FSYNC 也以该周期为基准。 */
     for (uint32_t ch = 0; ch < 4; ch++) {
         attr.vin_node_attr.lpwm_attr.lpwm_chn_attr[ch].enable        = 1;
         attr.vin_node_attr.lpwm_attr.lpwm_chn_attr[ch].trigger_source = 0;
@@ -89,12 +82,10 @@ int vin_open(hbn_vnode_handle_t *vin, int mipi_rx,
         attr.vin_node_attr.lpwm_attr.lpwm_chn_attr[ch].adjust_step    = 0;
     }
 
-    /* Input channel: the frame the sensor produces. */
     attr.vin_ichn_attr.width  = width;
     attr.vin_ichn_attr.height = height;
     attr.vin_ichn_attr.format = DSC_VIN_RAW10;
 
-    /* To DDR, RAW10 with a 2-byte-per-pixel stride. */
     attr.vin_ochn_attr[VIN_MAIN_FRAME].ddr_en = 1;
     attr.vin_ochn_attr[VIN_MAIN_FRAME].vin_basic_attr.format    = DSC_VIN_RAW10;
     attr.vin_ochn_attr[VIN_MAIN_FRAME].vin_basic_attr.wstride   = ochn_wstride;
@@ -106,7 +97,8 @@ int vin_open(hbn_vnode_handle_t *vin, int mipi_rx,
 
     attr.magicNumber = DSC_S100_MAGIC_NUMBER;
 
-    /* The node's hw_id is the MIPI receiver index, as in the platform's camera stack. */
+    /* VIN uses the MIPI receiver index as its hardware ID.
+     * VIN 使用 MIPI 接收器索引作为硬件 ID。 */
     if (hbn_vnode_open(HB_VIN, (uint32_t)mipi_rx, AUTO_ALLOC_ID, vin) != 0) {
         *vin = 0;
         return -1;

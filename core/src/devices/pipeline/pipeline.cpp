@@ -1,18 +1,7 @@
 /**
  * @file pipeline.cpp
- * @brief Platform dispatch: the platform backend .cpp is #included here, by path.
- *
- * This translation unit holds no code of its own. The build system selects the
- * platform by directory name and passes the backend file path as
- * -DDSC_PLATFORM_IMPL="devices/pipeline/<platform>/<platform>.cpp".
- * Adding a platform = create src/devices/pipeline/<name>/<name>.cpp; nothing else to touch.
- *
- * The backend defines dsc::pipeline::Pipeline, declares its node helpers in
- * <platform>/<platform>.h and keeps that header out of every other translation unit
- * (it is part of this file's include path only).
- *
- * Note: the backend file is not compiled on its own -- it must not be added to a
- * source list, and it cannot be compiled without the platform headers.
+ * @brief Build the backend selected by DSC_PLATFORM_IMPL. Do not compile its .cpp separately.
+ * @brief 编译 DSC_PLATFORM_IMPL 选定的后端。不要单独编译后端的 .cpp 文件。
  *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.

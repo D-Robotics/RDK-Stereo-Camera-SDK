@@ -1,10 +1,13 @@
 /**
  * @file union_stereo_fisheye_v1p3r0n4.cpp
  * @brief UNION stereo (no IMU), fisheye, v1.3, rotation 0 deg, 4 distortion coefficients.
+ * @brief UNION 双目（无 IMU），鱼眼，v1.3，旋转 0 度，4 个畸变系数。
  *
  * The camera calibration uses the same byte layout as UNION V1.2: double-precision
  * intrinsics, distortion coefficients and stereo extrinsics. The identification header
  * selects V1.3 without an IMU, so no IMU area is required or interpreted.
+ * 相机标定使用与 UNION V1.2 相同的字节布局：双精度内参、畸变系数与双目外参。识别头部
+ * 声明的是不含 IMU 的 V1.3，因此不需要也不解析 IMU 区。
  *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
@@ -25,19 +28,20 @@ constexpr uint8_t  kChecksumLen = 14;
 
 constexpr uint8_t kHeader[kHeaderSize] = {
     0x55, 0x4e, 0x49, 0x4f, 0x4e, 0x00, 0x00, 0x00,  // "UNION"
-    0x01, 0x01,   // stereo, no IMU
+    0x01, 0x01,   // stereo, no IMU 双目，无 IMU
     0x01, 0x03,   // v1.3
-    0x00,         // rotation 0 deg
-    0x04,         // 4 distortion coefficients
+    0x00,         // rotation 0 deg 旋转 0 度
+    0x04,         // 4 distortion coefficients 4 个畸变系数
     0x00,
 };
 
 // Camera calibration offsets, shared with UNION V1.2 (all fields are double).
+// 相机标定偏移量，与 UNION V1.2 共用（所有字段均为 double）。
 constexpr uint16_t kLFx     = 0x0018;
 constexpr uint16_t kRFx     = 0x0081;
 constexpr uint16_t kStereoR = 0x00EA;
 constexpr uint16_t kStereoT = 0x0132;
-constexpr uint16_t kSize    = 0x014A;   // camera calibration only
+constexpr uint16_t kSize    = 0x014A;   // camera calibration only 仅相机标定
 
 double read_double(const uint8_t *buf, uint16_t off)
 {
@@ -100,6 +104,7 @@ Status read(base::I2cDevice &bus, StereoImuModel *out)
     out->install_angle = 0;
 
     // The right camera is the common reference; the stored left-camera pose is direct.
+    // 右目相机是公共参考；存储的左目相机位姿可直接使用。
     for(uint8_t i = 0; i < 9; i++){
         out->cam_right_R[i] = (i % 4 == 0) ? 1.0 : 0.0;
         out->cam_left_R[i]  = read_double(buf, kStereoR + i * 8);
@@ -110,6 +115,7 @@ Status read(base::I2cDevice &bus, StereoImuModel *out)
     }
 
     // No IMU is present; all IMU fields stay zero-initialised.
+    // 没有 IMU；所有 IMU 字段保持零初始化。
     return Status::Ok;
 }
 

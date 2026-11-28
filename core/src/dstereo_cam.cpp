@@ -1,6 +1,7 @@
 /**
  * @file dsc.cpp
- * @brief Encapsulates the IMU, stereo camera and EEPROM devices behind the public header (dsc.h).
+ * @brief C API for capture and calibration.
+ * @brief 采集与标定的 C 接口。
  *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
@@ -30,7 +31,6 @@
 
 using namespace dsc;
 
-/* Internal Status -> C error code */
 static dsc_err_t to_err(Status st)
 {
     switch (st) {
@@ -45,79 +45,79 @@ static dsc_err_t to_err(Status st)
     return DSC_HW_ERROR;
 }
 
-/* Internal device state */
 struct dsc_device_s {
-    std::mutex              mtx;   // Serializes public API operations; worker threads do not acquire it.
+    std::mutex              mtx;   // Serializes public API operations; worker threads do not acquire it. 串行化公共 API 操作；工作线程不获取该锁。
 
     std::unique_ptr<eeprom::Eeprom>     eeprom;
     std::unique_ptr<imu::Imu>           imu;
     std::unique_ptr<pipeline::Pipeline> pipeline;
 
-    // Data queues: background threads enqueue frames/packets; the user dequeues them
     std::unique_ptr<
         base::Fifo<
             std::array<
                 dsc_image_nv12_t, static_cast<std::size_t>(CamIndex::Num)
-            >>> camera_fifo;   // [CamIndex::Right]=0, [CamIndex::Left]=1
+            >>> camera_fifo;
     std::unique_ptr<base::Fifo<dsc_imu_packet_t>> imu_fifo;
 
     StereoImuModel       cal_internal;
 
-    // Threads
     std::thread              camera_thread;
     std::thread              imu_thread;
-    std::atomic<bool>        camera_on{false}; // set once IMU finds FSYNC; the camera waits for it to start streaming
-    std::atomic<Status>      state{Status::ThreadClosed}; // Ok = running, ThreadClosed = idle, anything else = faulted (deinit() clears)
+    // With an IMU, wait for a batch ending in FSYNC before starting camera capture.
+    // 有 IMU 时，等到某批数据的末包带 FSYNC 标记后再启动相机采集。
+    std::atomic<bool>        camera_on{false};
+    // Runtime faults stay latched until deinit().
+    // 运行中的故障状态保留到 deinit()。
+    std::atomic<Status>      state{Status::ThreadClosed};
 
-    // Serialize the master and slave calls from their capture threads.
+    // The camera and IMU threads share the timestamp tracker.
+    // 相机和 IMU 线程共用时间戳跟踪器。
     std::mutex tracker_mtx;
     std::unique_ptr<base::TimestampTracker> tracker;
 
-    // Cached from the config at init (used by the threads)
-    uint64_t imu_group_delay_ns = 0;   // common UI-filter group delay read back at init
+    uint64_t imu_group_delay_ns = 0;
     uint32_t output_w = 0, output_h = 0;
     dsc_stereo_layout_t stereo_layout = DSC_STEREO_LAYOUT_NONE;
     uint32_t fps = 0;
     uint16_t accel_fsr_g = 0, gyro_fsr_dps = 0;
-    CamIndex fsync_camera = CamIndex::Right;   // eye bound to IMU FSYNC
+    CamIndex fsync_camera = CamIndex::Right;
 };
 
-/* ---- Calibration helpers (3x3 row-major) ---- */
+/* ---- Calibration helpers (3x3 row-major) 标定辅助函数（3x3 行主序） ---- */
 
-static void mat33_mul(const double *A, const double *B, double *C)   // C = A * B
+static void mat33_mul(const double *A, const double *B, double *C)   // C = A * B（矩阵相乘）
 {
     for(int i = 0; i < 3; i++)
         for(int j = 0; j < 3; j++)
             C[i*3+j] = A[i*3+0]*B[0*3+j] + A[i*3+1]*B[1*3+j] + A[i*3+2]*B[2*3+j];
 }
 
-static void mat33_t_mul(const double *A, const double *B, double *C)   // C = A^T * B
+static void mat33_t_mul(const double *A, const double *B, double *C)   // C = A^T * B（A 的转置乘以 B）
 {
     for(int i = 0; i < 3; i++)
         for(int j = 0; j < 3; j++)
             C[i*3+j] = A[0*3+i]*B[0*3+j] + A[1*3+i]*B[1*3+j] + A[2*3+i]*B[2*3+j];
 }
 
-static void mat33_mul_t(const double *A, const double *B, double *C)   // C = A * B^T
+static void mat33_mul_t(const double *A, const double *B, double *C)   // C = A * B^T（A 乘以 B 的转置）
 {
     for(int i = 0; i < 3; i++)
         for(int j = 0; j < 3; j++)
             C[i*3+j] = A[i*3+0]*B[j*3+0] + A[i*3+1]*B[j*3+1] + A[i*3+2]*B[j*3+2];
 }
 
-static void mat33_mul_vec(const double *A, const double *v, double *out)   // out = A * v
+static void mat33_mul_vec(const double *A, const double *v, double *out)   // out = A * v（矩阵乘以向量）
 {
     for(int i = 0; i < 3; i++)
         out[i] = A[i*3+0]*v[0] + A[i*3+1]*v[1] + A[i*3+2]*v[2];
 }
 
-static void mat33_t_mul_vec(const double *A, const double *v, double *out)   // out = A^T * v
+static void mat33_t_mul_vec(const double *A, const double *v, double *out)   // out = A^T * v（A 的转置乘以向量）
 {
     for(int i = 0; i < 3; i++)
         out[i] = A[0*3+i]*v[0] + A[1*3+i]*v[1] + A[2*3+i]*v[2];
 }
 
-// Return the stored sensor-to-reference extrinsics; invalid identifiers yield null pointers.
 static std::pair<double*, double*> frame_extrinsics(dsc_device_t *dev, dsc_reference_frame_t frame)
 {
     switch(frame){
@@ -128,15 +128,14 @@ static std::pair<double*, double*> frame_extrinsics(dsc_device_t *dev, dsc_refer
     }
 }
 
-/* ---- Background threads ---- */
+/* ---- Background threads 后台线程 ---- */
 
-// Release the camera at startup, then timestamp IMU samples as they are read.
 static void imu_thread_func(dsc_device_t *dev)
 {
     const double accel_scale = (double)dev->accel_fsr_g * 9.80665 / 32768.0;
     const double gyro_scale  = (double)dev->gyro_fsr_dps * 3.14159265358979323846 / 180.0 / 32768.0;
 
-    ImuHwFifo16Packet raw[128]; // hardware FIFO holds up to 128 packets
+    ImuHwFifo16Packet raw[128]; // hardware FIFO holds up to 128 packets 硬件 FIFO 最多可容纳 128 个数据包
     bool camera_released = false;
 
     while(dev->state.load() == Status::Ok) {
@@ -172,6 +171,7 @@ static void imu_thread_func(dsc_device_t *dev)
             pkt.temp = static_cast<float>(p.temp) / 2.07f + 25.0f;
             pkt.is_fsync = p.is_fsync;
             // Compensate the published sample, not the tracker's FSYNC timebase.
+            // 补偿对外发布的采样，而不是跟踪器的 FSYNC 时基。
             pkt.timestamp_ns = timestamp_ns - dev->imu_group_delay_ns;
             dev->imu_fifo->push(pkt);
         }
@@ -179,7 +179,6 @@ static void imu_thread_func(dsc_device_t *dev)
     }
 }
 
-// Release all pixel buffers in a frame pair; used as the camera FIFO disposer.
 static void free_frame_pair(std::array<dsc_image_nv12_t, static_cast<std::size_t>(CamIndex::Num)> &pair)
 {
     for(auto &image : pair) {
@@ -188,8 +187,6 @@ static void free_frame_pair(std::array<dsc_image_nv12_t, static_cast<std::size_t
     }
 }
 
-// Wait for the FSYNC handshake, start streaming, align stereo frames within half
-// a frame period, and enqueue completed frame pairs.
 static void camera_thread_func(dsc_device_t *dev)
 {
     while(dev->state.load() == Status::Ok && !dev->camera_on.load())usleep(1000);
@@ -198,7 +195,7 @@ static void camera_thread_func(dsc_device_t *dev)
     const Status st_start = dev->pipeline->start(dev->fsync_camera);
     if(st_start != Status::Ok){dev->state.store(st_start);return ;}
 
-    const uint64_t cycle_ns = 1000000000ULL / dev->fps / 2; // Maximum stereo skew: half a frame period.
+    const uint64_t cycle_ns = 1000000000ULL / dev->fps / 2;
     const size_t R = static_cast<std::size_t>(CamIndex::Right);
     const size_t L = static_cast<std::size_t>(CamIndex::Left);
 
@@ -213,15 +210,13 @@ static void camera_thread_func(dsc_device_t *dev)
         const uint32_t width  = dev->output_w;
         const uint32_t height = dev->output_h;
 
-        // Fetch the FSYNC-bound eye (master clock) first, then the other eye. Frames are
-        // dated at the exposure midpoint, while the tracker anchors on the trigger edge
-        // the FSYNC offset is measured from.
+        // Timestamp frames at the estimated exposure midpoint; anchor the tracker on the FSYNC trigger.
+        // 帧时间戳取估算的曝光中点，跟踪器仍以 FSYNC 触发沿为锚。
         const CamIndex F = dev->fsync_camera;
         const CamIndex O = (F == CamIndex::Right) ? CamIndex::Left : CamIndex::Right;
         const size_t fi = static_cast<std::size_t>(F);
         const size_t oi = static_cast<std::size_t>(O);
 
-        // allocate and lay out the frame buffer(s) for this capture
         switch(dev->stereo_layout){
             case DSC_STEREO_LAYOUT_NONE:
                 stride = width;
@@ -276,12 +271,12 @@ static void camera_thread_func(dsc_device_t *dev)
                 frame[0].width = width; frame[0].height = height * 2;
                 break;
             default:
-                goto free_frame;   // invalid layout (validated at init, unreachable)
+                goto free_frame;
         }
 
         st = dev->pipeline->get_frame(F, y[fi], uv[fi],
                                       width, height, stride, stride, &ts[fi], &trig[fi], 100);
-        if(st == Status::HwError){          // hardware fault, e.g. a frame without LPWM trigger
+        if(st == Status::HwError){
             dev->state.store(Status::HwError);
             goto free_frame;
         }
@@ -293,23 +288,24 @@ static void camera_thread_func(dsc_device_t *dev)
 
         st = dev->pipeline->get_frame(O, y[oi], uv[oi],
                                       width, height, stride, stride, &ts[oi], &trig[oi], 100);
-        if(st == Status::HwError){          // hardware fault, e.g. a frame without LPWM trigger
+        if(st == Status::HwError){
             dev->state.store(Status::HwError);
             goto free_frame;
         }
         if(st != Status::Ok)goto free_frame;
 
-        // half-frame alignment: drop the eye with the smaller (older) timestamp and refetch until aligned
+        // Refetch the older eye until the pair is within half a frame period.
+        // 重取较旧的一目，直到两帧时间差不超过半个帧周期。
         for(;;) {
             uint64_t d = (ts[R] > ts[L]) ? (ts[R] - ts[L]) : (ts[L] - ts[R]);
             if(d <= cycle_ns)break;
             if(dev->state.load() != Status::Ok)goto free_frame;
 
-            const size_t lag = (ts[R] < ts[L]) ? R : L;   // smaller timestamp = older frame
+            const size_t lag = (ts[R] < ts[L]) ? R : L;
             const CamIndex lag_idx = (lag == R) ? CamIndex::Right : CamIndex::Left;
             st = dev->pipeline->get_frame(lag_idx, y[lag], uv[lag],
                                           width, height, stride, stride, &ts[lag], &trig[lag], 100);
-            if(st == Status::HwError){          // hardware fault, e.g. a frame without LPWM trigger
+            if(st == Status::HwError){
             dev->state.store(Status::HwError);
             goto free_frame;
         }
@@ -324,7 +320,7 @@ static void camera_thread_func(dsc_device_t *dev)
             frame[R].timestamp_ns = ts[R];
             frame[L].timestamp_ns = ts[L];
         } else {
-            frame[0].timestamp_ns = ts[fi];   // combined frame keeps the FSYNC-bound eye's timestamp
+            frame[0].timestamp_ns = ts[fi];   // combined frame keeps the FSYNC-bound eye's timestamp 合并帧沿用与 FSYNC 绑定那一目的时间戳
         }
 
         if(!dev->camera_fifo->push(frame))goto free_frame;
@@ -336,19 +332,20 @@ free_frame:
 }
 
 // Stop and join the worker threads. The caller must hold dev->mtx.
+// 停止并等待工作线程退出。调用方必须持有 dev->mtx。
 static void stop_locked(dsc_device_t *dev)
 {
     Status expected = Status::Ok;
     dev->state.compare_exchange_strong(expected, Status::ThreadClosed);
 
-    if(!dev->camera_thread.joinable() && !dev->imu_thread.joinable())return;   // never started
+    if(!dev->camera_thread.joinable() && !dev->imu_thread.joinable())return;
     if(dev->camera_thread.joinable())dev->camera_thread.join();
     if(dev->imu_thread.joinable())dev->imu_thread.join();
     dev->pipeline->stop();
     if(dev->imu)dev->imu->stop();
 }
 
-/* ---- Public C API ---- */
+/* ---- Public C API 公共 C 接口 ---- */
 
 extern "C" {
 
@@ -372,13 +369,13 @@ const char *dsc_platform(void)
 
 dsc_device_t *dsc_create()
 {
-    return new dsc_device_t;   // state starts at DSC_THREAD_CLOSED
+    return new dsc_device_t;
 }
 
 void dsc_destroy(
     dsc_device_t *dev)
 {
-    delete dev;   // call dsc_deinit() first: destroying with running threads is undefined behavior
+    delete dev;   // call dsc_deinit() first: destroying with running threads is undefined behavior 请先调用 dsc_deinit()：在线程仍在运行时销毁属于未定义行为
 }
 
 dsc_err_t dsc_init(
@@ -387,14 +384,11 @@ dsc_err_t dsc_init(
 {
     if(dev == nullptr || cfg == nullptr)return DSC_PARAM_ERROR;
     std::lock_guard<std::mutex> lock(dev->mtx);
-    if(dev->eeprom || dev->pipeline || dev->imu)return DSC_PARAM_ERROR;   // already initialized
+    if(dev->eeprom || dev->pipeline || dev->imu)return DSC_PARAM_ERROR;
     if(cfg->camera_config.stereo_layout > DSC_STEREO_LAYOUT_BOTTOM_TOP)return DSC_PARAM_ERROR;
-    // A queue shallower than 2 is invalid and would never hand out data; the IMU
-    // queue is only required when the config asks for an IMU
     if(cfg->camera_fifo.depth < 2)return DSC_PARAM_ERROR;
     if(cfg->imu_config.bus_num > 0 && cfg->imu_fifo.depth < 2)return DSC_PARAM_ERROR;
 
-    // Create the EEPROM object: probe candidate buses in order, leave null on failure
     for(std::size_t i = 0; i < cfg->eeprom_config.bus_num; i++){
         dev->eeprom.reset(
             new eeprom::Eeprom(cfg->eeprom_config.bus[i], cfg->eeprom_config.addr));
@@ -402,7 +396,6 @@ dsc_err_t dsc_init(
     }
     if(dev->eeprom && !*dev->eeprom)dev->eeprom.reset();
 
-    // Create the IMU object: probe candidate buses in order, leave null on failure
     for(std::size_t i = 0; i < cfg->imu_config.bus_num; i++) {
         dev->imu.reset(
             new imu::Imu(cfg->imu_config.bus[i], cfg->imu_config.addr));
@@ -410,28 +403,24 @@ dsc_err_t dsc_init(
     }
     if(dev->imu && !*dev->imu)dev->imu.reset();
 
-    // Create the Pipeline object
     dev->pipeline.reset(
         new pipeline::Pipeline(
             cfg->camera_config.left_addr, cfg->camera_config.right_addr,
             cfg->camera_config.bus, cfg->camera_config.bus_num));
     if(!*dev->pipeline)return DSC_NOT_FOUND;
 
-    // Create the FIFOs (the Fifo constructor leaves itself invalid when depth < 2)
-    // Camera frames are malloc()'d by the camera thread, so the FIFO hands the
-    // frame it drops (or still holds when it dies) back to free_frame_pair()
+    // The FIFO frees frames it evicts or still owns when destroyed.
+    // FIFO 负责释放它淘汰的帧，以及销毁时仍持有的帧。
     dev->camera_fifo.reset(new base::Fifo<std::array<dsc_image_nv12_t, 2>>(
         cfg->camera_fifo.depth, static_cast<FifoMode>(cfg->camera_fifo.mode), free_frame_pair));
     dev->imu_fifo.reset(new base::Fifo<dsc_imu_packet_t>(
         cfg->imu_fifo.depth, static_cast<FifoMode>(cfg->imu_fifo.mode)));
 
-    // Read the EEPROM calibration (read if probed; map failures to error codes)
     if(dev->eeprom) {
         Status st = dev->eeprom->read(&dev->cal_internal);
         if(st != Status::Ok)return to_err(st);
     }
 
-    // Initialize the IMU (configure only, no streaming; if probed, configuration must succeed)
     if(dev->imu) {
         ImuConfig ic{};
         ic.odr_hz       = cfg->imu_config.odr_hz;
@@ -440,14 +429,13 @@ dsc_err_t dsc_init(
         ic.bw_sel       = cfg->imu_config.bw_sel;
         Status st = dev->imu->init(ic);
         if(st != Status::Ok)return to_err(st);
-        // Cache the DC filter delay before streaming starts using the bus.
-        // Leave unsupported configurations uncompensated; do not hide I2C failures.
+        // Read the delay before the IMU thread takes over I2C. Unsupported means no compensation.
+        // 在 IMU 线程接管 I2C 前读取延迟。配置不支持时不补偿。
         dev->imu_group_delay_ns = 0;
         st = dev->imu->group_delay_ns(&dev->imu_group_delay_ns);
         if(st != Status::Ok && st != Status::Unsupported)return to_err(st);
     }
 
-    // Cache the parameters needed by the threads
     dev->output_w = cfg->camera_config.output_width;
     dev->output_h = cfg->camera_config.output_height;
     dev->stereo_layout = cfg->camera_config.stereo_layout;
@@ -457,7 +445,6 @@ dsc_err_t dsc_init(
     dev->fsync_camera = (cfg->camera_config.fsync_camera == DSC_CAMERA_RIGHT_IDX)
                              ? CamIndex::Right : CamIndex::Left;
 
-    // Initialize the camera (stream setup config, no streaming)
     {
         const dsc_camera_config_t &cc = cfg->camera_config;
         PipelineConfig pc{};
@@ -475,6 +462,7 @@ dsc_err_t dsc_init(
 
         StereoImuModel *cal = dev->eeprom ? &dev->cal_internal : nullptr;
         // RESIZE and RECT update output intrinsics, so both require calibration.
+        // RESIZE 和 RECT 会更新输出内参，因此两者都需要标定数据。
         if(cal == nullptr && cc.mode != DSC_CAMERA_MODE_RAW)return DSC_PARAM_ERROR;
         Status st = dev->pipeline->init(pc, cal);
         if(st != Status::Ok)return to_err(st);
@@ -489,12 +477,12 @@ dsc_err_t dsc_deinit(
     if(dev == nullptr)return DSC_PARAM_ERROR;
     std::lock_guard<std::mutex> lock(dev->mtx);
 
-    stop_locked(dev);   // joins the threads if they are running (dev->mtx already held)
+    stop_locked(dev);
 
-    dev->state.store(Status::ThreadClosed);   // clear any latched fault so the device can be re-initialized
-    dev->pipeline.reset();   // triggers destructor: tear down stream + restore sensor power-on state
-    dev->imu.reset();        // close I2C
-    dev->eeprom.reset();     // close I2C
+    dev->state.store(Status::ThreadClosed);
+    dev->pipeline.reset();
+    dev->imu.reset();
+    dev->eeprom.reset();
     dev->camera_fifo.reset();
     dev->imu_fifo.reset();
     dev->tracker.reset();
@@ -508,13 +496,13 @@ dsc_err_t dsc_start(
     std::lock_guard<std::mutex> lock(dev->mtx);
 
     const Status st = dev->state.load();
-    if(st == Status::Ok)return DSC_PARAM_ERROR;            // already started
-    if(st != Status::ThreadClosed)return to_err(st);               // faulted: deinit() first
-    if(!dev->pipeline)return DSC_PARAM_ERROR;           // not initialized
+    if(st == Status::Ok)return DSC_PARAM_ERROR;
+    if(st != Status::ThreadClosed)return to_err(st);               // faulted: deinit() first 已故障：请先 deinit()
+    if(!dev->pipeline)return DSC_PARAM_ERROR;
     if(dev->imu){
         if(dev->fps == 0)return DSC_PARAM_ERROR;
-        // Match the LPWM register: the period is configured in whole microseconds
-        // (vin.c: pulse_period_us = 1000000 / fps), so 1e9/fps is off by up to 1 us.
+        // Match vin.c: truncate the LPWM period to whole microseconds before converting to ns.
+        // 与 vin.c 一致：LPWM 周期先截断到整微秒，再换算为纳秒。
         dev->tracker = std::make_unique<base::TimestampTracker>(
             (1000000U / dev->fps) * 1000U);
     }
@@ -527,7 +515,7 @@ dsc_err_t dsc_start(
         if(s != Status::Ok) { dev->state.store(Status::ThreadClosed); return to_err(s); }
         dev->imu_thread = std::thread(imu_thread_func, dev);
     } else {
-        dev->camera_on = true;   // no IMU: skip the handshake, start streaming directly
+        dev->camera_on = true;   // no IMU: skip the handshake, start streaming directly 无 IMU：跳过握手，直接开始取流
     }
     dev->camera_thread = std::thread(camera_thread_func, dev);
 
@@ -542,7 +530,7 @@ void dsc_stop(
     stop_locked(dev);
 }
 
-/* ---- Camera data ---- */
+/* ---- Camera data 相机数据 ---- */
 
 size_t dsc_available_camera(
     dsc_device_t *dev)
@@ -561,7 +549,7 @@ dsc_err_t dsc_get_nv12_frame(
     if(dev == nullptr || image_left == nullptr || image_right == nullptr)
         return DSC_PARAM_ERROR;
     std::lock_guard<std::mutex> lock(dev->mtx);
-    if(const Status st = dev->state.load(); st != Status::Ok)return to_err(st);   // idle/never started = ThreadClosed, a fault reports itself
+    if(const Status st = dev->state.load(); st != Status::Ok)return to_err(st);
     if(dev->stereo_layout != DSC_STEREO_LAYOUT_NONE)return DSC_UNSUPPORTED;
     if(!dev->camera_fifo)return DSC_PARAM_ERROR;
 
@@ -579,18 +567,18 @@ dsc_err_t dsc_get_stereo_nv12_frame(
 {
     if(dev == nullptr || image == nullptr)return DSC_PARAM_ERROR;
     std::lock_guard<std::mutex> lock(dev->mtx);
-    if(const Status st = dev->state.load(); st != Status::Ok)return to_err(st);   // idle/never started = ThreadClosed, a fault reports itself
+    if(const Status st = dev->state.load(); st != Status::Ok)return to_err(st);
     if(dev->stereo_layout == DSC_STEREO_LAYOUT_NONE)return DSC_UNSUPPORTED;
     if(!dev->camera_fifo)return DSC_PARAM_ERROR;
 
     std::array<dsc_image_nv12_t, 2> f;
     if(!dev->camera_fifo->pop(f))return DSC_TIMEOUT;
 
-    *image = f[0];   // Transfer the assembled buffer without another pixel copy.
+    *image = f[0];   // Transfer the assembled buffer without another pixel copy. 直接交出已组装的缓冲区，不再多做一次像素拷贝。
     return DSC_OK;
 }
 
-/* ---- IMU data ---- */
+/* ---- IMU data IMU 数据 ---- */
 
 size_t dsc_available_imu(
     dsc_device_t *dev)
@@ -607,7 +595,7 @@ dsc_err_t dsc_get_imu_packet(
 {
     if(dev == nullptr || out == nullptr)return DSC_PARAM_ERROR;
     std::lock_guard<std::mutex> lock(dev->mtx);
-    if(const Status st = dev->state.load(); st != Status::Ok)return to_err(st);   // idle/never started = ThreadClosed, a fault reports itself
+    if(const Status st = dev->state.load(); st != Status::Ok)return to_err(st);
     if(!dev->imu || !dev->imu_fifo)return DSC_PARAM_ERROR;
     if(!dev->imu_fifo->pop(*out))return DSC_TIMEOUT;
     return DSC_OK;
@@ -629,7 +617,7 @@ const char *dsc_get_imu_info(
     return dev->imu->info();
 }
 
-/* ---- Calibration ---- */
+/* ---- Calibration 标定 ---- */
 
 dsc_err_t dsc_get_camera_intrinsics(
     dsc_device_t *dev,
@@ -640,7 +628,7 @@ dsc_err_t dsc_get_camera_intrinsics(
     std::lock_guard<std::mutex> lock(dev->mtx);
     if(cam_idx != DSC_CAMERA_LEFT_IDX && cam_idx != DSC_CAMERA_RIGHT_IDX)return DSC_PARAM_ERROR;
     const Status st = dev->state.load();
-    if(st != Status::Ok && st != Status::ThreadClosed)return to_err(st);   // idle is fine here, a fault reports itself
+    if(st != Status::Ok && st != Status::ThreadClosed)return to_err(st);
     if(!dev->eeprom)return DSC_NOT_FOUND;
 
     const CameraIntrinsics &src = (cam_idx == DSC_CAMERA_LEFT_IDX) ? dev->cal_internal.cam_left
@@ -661,7 +649,7 @@ dsc_err_t dsc_get_imu_intrinsics(
     if(dev == nullptr || intrinsics == nullptr)return DSC_PARAM_ERROR;
     std::lock_guard<std::mutex> lock(dev->mtx);
     const Status st = dev->state.load();
-    if(st != Status::Ok && st != Status::ThreadClosed)return to_err(st);   // idle is fine here, a fault reports itself
+    if(st != Status::Ok && st != Status::ThreadClosed)return to_err(st);
     if(!dev->eeprom)return DSC_NOT_FOUND;
 
     const ImuIntrinsics &src = dev->cal_internal.imu;
@@ -687,14 +675,14 @@ dsc_err_t dsc_get_relative_R(
     if(dev == nullptr || R == nullptr)return DSC_PARAM_ERROR;
     std::lock_guard<std::mutex> lock(dev->mtx);
     const Status st = dev->state.load();
-    if(st != Status::Ok && st != Status::ThreadClosed)return to_err(st);   // idle is fine here, a fault reports itself
+    if(st != Status::Ok && st != Status::ThreadClosed)return to_err(st);
     if(!dev->eeprom)return DSC_NOT_FOUND;
 
     const auto from = frame_extrinsics(dev, from_frame);
     const auto to   = frame_extrinsics(dev, to_frame);
     if(from.first == nullptr || to.first == nullptr)return DSC_PARAM_ERROR;
 
-    mat33_t_mul(to.first, from.first, R);   // R = R_to^T * R_from
+    mat33_t_mul(to.first, from.first, R);   // R = R_to^T * R_from（相对旋转矩阵）
     return DSC_OK;
 }
 
@@ -707,7 +695,7 @@ dsc_err_t dsc_get_relative_T(
     if(dev == nullptr || T == nullptr)return DSC_PARAM_ERROR;
     std::lock_guard<std::mutex> lock(dev->mtx);
     const Status st = dev->state.load();
-    if(st != Status::Ok && st != Status::ThreadClosed)return to_err(st);   // idle is fine here, a fault reports itself
+    if(st != Status::Ok && st != Status::ThreadClosed)return to_err(st);
     if(!dev->eeprom)return DSC_NOT_FOUND;
 
     const auto from = frame_extrinsics(dev, from_frame);
@@ -715,6 +703,7 @@ dsc_err_t dsc_get_relative_T(
     if(from.first == nullptr || to.first == nullptr)return DSC_PARAM_ERROR;
 
     // T = R_to^T * (T_from - T_to)
+    // 相对平移向量
     const double d[3] = {from.second[0] - to.second[0],
                          from.second[1] - to.second[1],
                          from.second[2] - to.second[2]};
@@ -729,7 +718,7 @@ dsc_err_t dsc_get_calibration(
     if(dev == nullptr || calibration == nullptr)return DSC_PARAM_ERROR;
     std::lock_guard<std::mutex> lock(dev->mtx);
     const Status st = dev->state.load();
-    if(st != Status::Ok && st != Status::ThreadClosed)return to_err(st);   // idle is fine here, a fault reports itself
+    if(st != Status::Ok && st != Status::ThreadClosed)return to_err(st);
     if(!dev->eeprom)return DSC_NOT_FOUND;
 
     static_assert(sizeof(dsc_calibration_t) == sizeof(StereoImuModel),
@@ -747,16 +736,16 @@ dsc_err_t dsc_convert_calibration(
     if(dev == nullptr || ref_R == nullptr || ref_T == nullptr)return DSC_PARAM_ERROR;
     std::lock_guard<std::mutex> lock(dev->mtx);
     const Status st = dev->state.load();
-    if(st != Status::Ok && st != Status::ThreadClosed)return to_err(st);   // idle is fine here, a fault reports itself
+    if(st != Status::Ok && st != Status::ThreadClosed)return to_err(st);
     if(!dev->eeprom)return DSC_NOT_FOUND;
 
     const auto anchor = frame_extrinsics(dev, ref_frame);
     if(anchor.first == nullptr)return DSC_PARAM_ERROR;
 
-    // Re-anchor: G maps old reference frame -> new one; afterwards the chosen frame's
-    // extrinsic becomes exactly (ref_R, ref_T), all others keep their relative poses:
-    //   G_R = ref_R * R_anchor^T,  G_T = ref_T - G_R * T_anchor
-    //   R_x' = G_R * R_x,          T_x' = G_R * T_x + G_T
+    // Map the old reference frame to the new one so the anchor takes (ref_R, ref_T).
+    // Apply the same transform to every sensor to preserve their relative poses.
+    // 将旧参考系变换到新参考系，使锚点外参等于 (ref_R, ref_T)。
+    // 所有传感器应用同一变换，彼此的相对位姿不变。
     double GR[9], GT[3], tmp[3];
     mat33_mul_t(ref_R, anchor.first, GR);
     mat33_mul_vec(GR, anchor.second, tmp);

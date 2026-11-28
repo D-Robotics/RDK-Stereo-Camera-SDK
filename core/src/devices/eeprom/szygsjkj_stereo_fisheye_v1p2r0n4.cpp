@@ -1,14 +1,7 @@
 /**
  * @file szygsjkj_stereo_fisheye_v1p2r0n4.cpp
  * @brief SZYGSJKJ stereo (no IMU), fisheye, v1.2, rotation 0 deg, 4 distortion coefficients.
- *
- * This file is self-contained: header, checksum, offsets, and field widths are all local.
- * The EEPROM is read once as a flat byte image. Floating-point fields are copied directly
- * into host objects, so the EEPROM encoding must match the target's IEEE-754 byte order.
- *
- * The camera-area layout matches the other SZYGSJKJ V1.2 models: two 56-byte intrinsics
- * blocks followed by the stereo rotation and translation. This variant uses the first
- * four distortion slots as OpenCV equidistant coefficients and has no IMU area to parse.
+ * @brief SZYGSJKJ 双目（无 IMU），鱼眼，v1.2，旋转 0 度，4 个畸变系数。
  *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
@@ -23,26 +16,26 @@ namespace dsc {
 namespace eeprom {
 namespace {
 
-// ============================== Identification ==============================
+// ============================== Identification 识别 ==============================
 constexpr uint16_t kHeaderSize = 15;
 constexpr uint16_t kChecksumOff = kHeaderSize;
 constexpr uint8_t  kChecksumLen = 14;
 
 constexpr uint8_t kHeader[kHeaderSize] = {
     0x53, 0x5a, 0x59, 0x47, 0x53, 0x4a, 0x4b, 0x4a,  // "SZYGSJKJ"
-    0x01, 0x01,   // stereo, no IMU
+    0x01, 0x01,   // stereo, no IMU 双目，无 IMU
     0x01, 0x02,   // v1.2
-    0x00,         // rotation index 0 (0 deg)
-    0x04,         // 4 distortion coefficients
+    0x00,         // rotation index 0 (0 deg) 旋转索引 0（0 度）
+    0x04,         // 4 distortion coefficients 4 个畸变系数
     0x00,
 };
 
-// ============================== Layout offsets ==============================
+// ============================== Layout offsets 布局偏移 ==============================
 constexpr uint16_t kLBlock   = 0x0010;
 constexpr uint16_t kRBlock   = 0x0048;
 constexpr uint16_t kStereoR  = 0x008C;
 constexpr uint16_t kStereoT  = 0x00B0;
-constexpr uint16_t kSize     = 0x00C0;   // camera calibration only; there is no IMU area
+constexpr uint16_t kSize     = 0x00C0;   // camera calibration only; there is no IMU area 仅相机标定；没有 IMU 区
 
 constexpr uint16_t kDistOff   = 0x0018;
 constexpr uint8_t  kDistCount = 4;
@@ -101,12 +94,14 @@ Status read(base::I2cDevice &bus, StereoImuModel *out)
     *out = StereoImuModel{};
 
     // The EEPROM L/R blocks map directly to the module's left and right cameras.
+    // EEPROM 的 L/R 块直接对应模组的左目与右目相机。
     read_intrinsics(buf, &out->cam_left,  kLBlock);
     read_intrinsics(buf, &out->cam_right, kRBlock);
 
     out->install_angle = 0;
 
     // The right camera is the common reference; the stored pose belongs to the left camera.
+    // 右目相机是公共参考；存储的位姿属于左目相机。
     double r_stored[9];
     double t_stored[3];
     for(uint8_t i = 0; i < 9; i++)
@@ -124,6 +119,7 @@ Status read(base::I2cDevice &bus, StereoImuModel *out)
     }
 
     // No IMU is present; all IMU fields stay zero-initialised.
+    // 没有 IMU；所有 IMU 字段保持零初始化。
     return Status::Ok;
 }
 

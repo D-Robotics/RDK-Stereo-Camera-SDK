@@ -1,13 +1,10 @@
 /**
  * @file dsc-detect-eeprom.cpp
- * @brief Scan I2C buses x addresses for a known calibration EEPROM.
+ * @brief Detect calibration EEPROMs at I2C address 0x50.
+ * @brief 在 I2C 地址 0x50 探测标定 EEPROM。
  *
- * Internal bring-up tool, dispatched by the @c dstereo-cam script as
- * @c "dstereo-cam detect eeprom": every (bus, address) probe point prints exactly one
- * result line (model name plus its details on a hit), so the output also shows
- * where an unknown device answered and where nothing answered at all.
- *
- * Usage: dstereo-cam detect eeprom [-b <bus...>]
+ * Usage: dsc detect eeprom [-b <bus...>]
+ * 用法：dsc detect eeprom [-b <bus...>]
  *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
@@ -27,17 +24,13 @@ using namespace dsc;
 
 namespace {
 
-// Identification area layout: 15 header bytes [0..14] followed by the checksum byte
-// [15].  The authoritative definition of the sizes and of the checksum expression is
-// the model file devices/eeprom/union_stereo_imu_fisheye_v1p2r0n4.cpp
-// (kHeaderSize / kChecksumOff / kChecksumLen and its probe()); the constants below are
-// read-only mirrors used by the miss branch.  Keep them in sync with that file.
-constexpr uint16_t kIdAreaSize = 16;   // identification area, addressed 0x0000
-constexpr uint8_t kChecksumOff = 15;   // checksum follows the header
-constexpr uint8_t kChecksumLen = 14;   // only the first 14 bytes take part
-constexpr uint8_t kVendorLen   = 8;    // vendor string, NUL padded within these 8
+// Keep the header layout and checksum in sync with union_stereo_imu_fisheye_v1p2r0n4.cpp.
+// 标识区布局和校验算法须与 union_stereo_imu_fisheye_v1p2r0n4.cpp 一致。
+constexpr uint16_t kIdAreaSize = 16;
+constexpr uint8_t kChecksumOff = 15;
+constexpr uint8_t kChecksumLen = 14;   // Byte 14 is excluded. 校验不包含第 14 号字节。
+constexpr uint8_t kVendorLen   = 8;
 
-// Mirror of the model checksum: sum of the first 14 bytes, then (sum % 255) + 1.
 static uint8_t id_area_checksum(const uint8_t *raw)
 {
     uint16_t sum = 0;
@@ -45,24 +38,20 @@ static uint8_t id_area_checksum(const uint8_t *raw)
     return (uint8_t)((sum % 255) + 1);
 }
 
-// True when the identification area carries a self-consistent header.  The registered
-// model is matched by Eeprom's own probe; this gate only answers "does the 16-byte
-// block look like a header at all", so an unregistered model passes it too.
+
 static bool id_area_ok(const uint8_t *raw)
 {
     return id_area_checksum(raw) == raw[kChecksumOff];
 }
 
-// Vendor field of the identification area as a NUL-terminated bounded copy, so it can
-// be printed with %.8s; the 16-byte read buffer is never handed to %s.
+// The vendor field may fill all 8 bytes without a NUL terminator.
+// 厂商字段可能占满 8 字节，不带 NUL 结束符。
 static void id_area_vendor(const uint8_t *raw, char *out /* [kVendorLen + 1] */)
 {
     for(uint8_t i = 0; i < kVendorLen; i++)out[i] = (char)raw[i];
     out[kVendorLen] = '\0';
 }
 
-// Result-column text of one probe point whose identification area checks out but no
-// registered model matched (no leading row prefix).
 static void miss_text(const uint8_t *raw, char *out, size_t cap)
 {
     char vendor[kVendorLen + 1];
@@ -73,23 +62,15 @@ static void miss_text(const uint8_t *raw, char *out, size_t cap)
 
 } // namespace
 
-/**
- * @brief Parse one command-line integer argument.
- *
- * @param[in]  s   Text to parse.
- * @param[out] out Receives the parsed value.
- * @return true when @p s was consumed completely.
- */
 static bool parse_int(const char *s, int *out)
 {
     char *end = nullptr;
-    long v = strtol(s, &end, 0);   // base 0: decimal, 0x-hex, 0-octal
+    long v = strtol(s, &end, 0);   // base 0: decimal, 0x-hex, 0-octal 进制 0：十进制、0x 十六进制、0 八进制
     if(end == s || *end != '\0')return false;
     *out = (int)v;
     return true;
 }
 
-// print a (possibly multi-line) string, indenting every line under the result column
 static void print_block(const char *indent, const char *text)
 {
     if(!text)return;
@@ -102,13 +83,8 @@ static void print_block(const char *indent, const char *text)
     }
 }
 
-/**
- * @brief Probe every requested (bus, address) pair, one result line per point.
- *
- * @param[in] argc,argv Optional @c -b <bus...>; the address is fixed to 0x50.
- * @return 0 when the scan completed (also when no EEPROM was found), 1 on a usage
- *         or argument error.
- */
+// Exit 0 means the scan completed, not that an EEPROM was found.
+// 返回 0 只表示扫描完成，不代表找到了 EEPROM。
 int main(int argc, char **argv)
 {
     std::vector<int> buses;
@@ -141,16 +117,14 @@ int main(int argc, char **argv)
             continue;
         }
         for(int a : addrs){
-            // constructor probes the auto-registered model table on this bus/addr
             eeprom::Eeprom ep((uint8_t)b, (uint8_t)a);
             if(ep){
                 printf(" %3d  0x%02x   %s\n", b, a, ep.name());
                 print_block("                ", ep.info());
                 n_found++;
             } else {
-                // No registered model matched.  The identification area decides the
-                // outcome: a self-consistent 16-byte block carries a header whose model
-                // is simply not registered here, anything else is reported as absent.
+                // After the model probe misses, an ACK alone is not enough: require a valid header checksum.
+                // 未匹配到已注册型号时，仅有应答还不够，标识区的校验和也必须通过。
                 base::I2cDevice d((uint8_t)b, (uint8_t)a);
                 uint8_t v;
                 if(!d) {

@@ -1,6 +1,5 @@
 /**
  * @file flow.c
- * @brief flow node: vflow build/bind and camera teardown helpers.
  *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
@@ -21,21 +20,12 @@ int vflow_build(hbn_vflow_handle_t *vflow, camera_handle_t cam_fd,
         *vflow = 0;
         return -1;
     }
-    // A handle of 0 skips that stage.
     if (hbn_vflow_add_vnode(*vflow, vin) != 0 ||
         (isp != 0 && hbn_vflow_add_vnode(*vflow, isp) != 0) ||
         (gdc != 0 && hbn_vflow_add_vnode(*vflow, gdc) != 0) ||
         (pym != 0 && hbn_vflow_add_vnode(*vflow, pym) != 0))
         return -1;
 
-    /*
-     * The caller chooses the order after vin -> isp:
-     *
-     *   gdc_before_pym == 0: isp -> pym -> [gdc]. PYM scales; a GDC, when present, only
-     *     transforms the frame it is handed.
-     *   gdc_before_pym == 1: isp -> gdc -> pym. The GDC resamples onto the rectification
-     *     grid, which is larger than the sensor frame, and PYM windows and scales that.
-     */
     if(isp != 0 && hbn_vflow_bind_vnode(*vflow, vin, 0, isp, 0) != 0)return -1;
     if(pym != 0 && isp != 0 && gdc_before_pym && gdc != 0){
         if(hbn_vflow_bind_vnode(*vflow, isp, 0, gdc, 0) != 0) return -1;
@@ -44,7 +34,6 @@ int vflow_build(hbn_vflow_handle_t *vflow, camera_handle_t cam_fd,
         *out_chn  = pym_chn;
     }
     else if(pym != 0 && isp != 0){
-        /* The ISP's offline/DDR output on channel 0 binds straight to PYM. */
         if(hbn_vflow_bind_vnode(*vflow, isp, 0, pym, 0) != 0) return -1;
         if(gdc != 0){
             if(hbn_vflow_bind_vnode(*vflow, pym, pym_chn, gdc, 0) != 0) return -1;
@@ -61,12 +50,10 @@ int vflow_build(hbn_vflow_handle_t *vflow, camera_handle_t cam_fd,
         *out_chn  = 0;
     }
     else if(isp != 0){
-        // The ISP's single output channel is channel 0.
         *out_node = isp;
         *out_chn  = 0;
     }
     else{
-        // No ISP in the flow, so read the capture node itself.
         *out_node = vin;
         *out_chn  = 0;
     }

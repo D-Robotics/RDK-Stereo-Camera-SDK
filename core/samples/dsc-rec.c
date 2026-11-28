@@ -1,6 +1,7 @@
 /**
  * @file dsc-rec.c
  * @brief Record camera frames and IMU packets into index ranges
+ * @brief 把相机帧与 IMU 数据包按索引区间录制下来
  *
  * usage: dsc-rec <cam_from> <cam_to> <imu_from> <imu_to> <out_dir> <stitch>
  *                   <device> <mode> <width> <height> <fps> <odr>
@@ -19,48 +20,6 @@
  *   <fps>                 camera frame rate
  *   <odr>                 IMU output data rate in Hz
  *
- *   Normally not called directly: 'rec' inside `dstereo-cam shell` parses
- *   '-c <from:to> -i <from:to> -o <dir> [--stitch]' and passes the device config
- *   locked by the shell in exactly this order, with -1 for a range that was not
- *   given. Runs until SIGINT (Ctrl-C), which then writes out what was captured.
- *
- * output:
- *
- *   <out_dir>/cam/%06ld.nv12        one stitched frame per index (<stitch> != 0)
- *   <out_dir>/cam/%06ld_L.nv12      left eye, <stitch> == 0
- *   <out_dir>/cam/%06ld_R.nv12      right eye, <stitch> == 0
- *   <out_dir>/imu.csv               one row per kept packet
- *
- *   The number in a camera file name is the frame's index in the range, so
- *   '-c 100:110' writes 000100 .. 000109; an index is 0-based and counts what the
- *   stream produced since startup, so every run numbers its own data from 0.
- *   Each file holds one tightly packed NV12 frame, width * height * 3 / 2 bytes.
- *   imu.csv starts with a header row and its timestamp_ns column is the IMU
- *   sample time in nanoseconds on the camera clock, the same quantity the 'run'
- *   sample prints in seconds:
- *
- *   index,timestamp_ns,acc_x,acc_y,acc_z,gyro_x,gyro_y,gyro_z,temp,is_fsync
- *
- *   Progress goes to stdout while recording: an opening "recording into ..."
- *   line, then a "[<elapsed>s] cam <kept>/<cap> imu <kept>/<cap>" line every
- *   REPORT_US (1 s), and finally the kept totals and the written paths. <elapsed>
- *   counts seconds since this run started (a monotonic clock), unlike the
- *   recorded timestamps; is_fsync is 1 when the packet carries an IMU FSYNC
- *   anchor and 0 otherwise.
- *
- * exit status: 0 after Ctrl-C, 1 when there is no range to keep, when the camera
- * range exceeds MAX_FRAMES ("camera range is <n> frames, the limit is 512"), on
- * an allocation failure, or when dsc_init()/dsc_start() failed. The 'rec'
- * command validates its ranges before starting this program, so those messages
- * come from the shell, not from here.
- *
- * error reporting: this program prints plain, unprefixed diagnostics on stderr
- * ("nothing to record", "out of memory", "cannot open <path>"), so a failure that
- * happens in here does not carry the 'dsc-...: <reason>' / try '--help'
- * contract the shell script follows. The same is true of the other sample
- * programs, and of '--help' and argument validation: those live in the dstereo-cam
- * script, not in the samples.
- *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
  * SPDX-License-Identifier: MIT
@@ -78,7 +37,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#define MAX_FRAMES 512   /* the kept range lives in RAM: ~2 GiB at 1088x1280 stereo */
+#define MAX_FRAMES 512   /* the kept range lives in RAM: ~2 GiB at 1088x1280 stereo 保留的区间常驻内存：1088x1280 双目约 2 GiB */
 #define REPORT_US  1000000
 
 static volatile sig_atomic_t stop = 0;
@@ -137,9 +96,11 @@ int main(int argc, char **argv)
     if(stitch)cfg.camera_config.stereo_layout = DSC_STEREO_LAYOUT_LEFT_RIGHT;
 
     /* Create Device Handle */
+    /* 创建设备句柄 */
     dsc_device_t *dev = dsc_create();
 
     /* Init Device and Start DataFlow */
+    /* 初始化设备并启动数据流 */
     int ret = 0;
     if(dsc_init(dev, &cfg) != DSC_OK || dsc_start(dev) != DSC_OK){
         fprintf(stderr, "init or start failed\n");
@@ -153,6 +114,7 @@ int main(int argc, char **argv)
     uint64_t cam_idx = 0, imu_idx = 0;
 
     /* Get data */
+    /* 获取数据 */
     while(!stop){
         dsc_image_nv12_t f[2];
         while(get_frame(dev, stitch, f)){
@@ -162,7 +124,7 @@ int main(int argc, char **argv)
                 cam[ncam][1] = f[1];
                 ncam++;
             } else {
-                free(f[0].data), free(f[1].data);   /* the buffer is ours to free */
+                free(f[0].data), free(f[1].data);   /* the buffer is ours to free 缓冲区由我们释放 */
             }
         }
         dsc_imu_packet_t p;
@@ -176,14 +138,16 @@ int main(int argc, char **argv)
     }
 
     /* release the device before the write, so it is not held while the files go out */
+    /* 在写文件之前先释放设备，这样写文件期间不会一直占用设备 */
     dsc_stop(dev);
     dsc_deinit(dev);
     dsc_destroy(dev);
-    dev = NULL;   /* out: only tears the device down when init/start failed */
+    dev = NULL;   /* out: only tears the device down when init/start failed 仅在 init/start 失败时才销毁设备 */
     printf("\nrecorded for %.3fs: kept %zu camera frames and %zu imu packets\n",
            (double)(now_us() - t0) / 1e6, ncam, nimu);
 
     /* the kept items are a contiguous run, so entry i is <range>_from + i */
+    /* 保留的数据项是连续的一段，因此第 i 项对应 <range>_from + i */
     for(size_t i = 0; i < ncam; i++)
         for(int e = 0; e < (stitch ? 1 : 2); e++){
             save_frame(dir, cam_from + (long)i, stitch ? "" : (e ? "_R" : "_L"), &cam[i][e]);
@@ -203,6 +167,7 @@ out:
 }
 
 /* pull one frame pair; when stitching there is one frame in f[0] and f[1] stays empty */
+/* 取一帧图像对；拼接时只有 f[0] 中有一帧，f[1] 保持为空 */
 static bool get_frame(dsc_device_t *dev, bool stitch, dsc_image_nv12_t f[2])
 {
     f[1] = (dsc_image_nv12_t){0};

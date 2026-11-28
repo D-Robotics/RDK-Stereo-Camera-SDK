@@ -1,6 +1,5 @@
 /**
  * @file gdc.c
- * @brief gdc node: apply +0.5/clamp/rotation to the map, encode it as a bin, then open the GDC vnode.
  *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
@@ -19,11 +18,10 @@ int gdc_open(hbn_vnode_handle_t *gdc, hb_mem_common_buf_t *gdc_bin,
     const uint32_t npts = grid_w * grid_h;
     const point_t *m = (const point_t *)map;
 
-    // xmax/ymax bound the GDC input frame, which is the sensor frame
     const double xmax = (double)in_w - 1.0;
     const double ymax = (double)in_h - 1.0;
-    // the map is generated in the rotated orientation, so for a 90/270 degree install
-    // rotation its coordinates span the sensor height; the clamp bounds follow that
+    // The map uses rotated axes; swap the clamp bounds for 90° and 270°.
+    // 映射表采用旋转后的坐标轴；90° 和 270° 时交换钳位上界。
     const int    swap     = (install_angle == 90 || install_angle == 270);
     const double src_xmax = swap ? ymax : xmax;
     const double src_ymax = swap ? xmax : ymax;
@@ -33,13 +31,14 @@ int gdc_open(hbn_vnode_handle_t *gdc, hb_mem_common_buf_t *gdc_bin,
         return -1;
 
     for (uint32_t i = 0; i < npts; ++i) {
-        /* GDC bilinear-interpolation compensation: +0.5 sub-pixel, clamp to avoid black edges */
+        /* Shift by +0.5 px for bilinear sampling; cap at the upper edge to avoid black borders.
+           双线性采样补偿 +0.5 像素；钳位上界，避免黑边。 */
         double x = m[i].x + 0.5;
         double y = m[i].y + 0.5;
         if (x > src_xmax) x = src_xmax;
         if (y > src_ymax) y = src_ymax;
-        /* the install rotation is applied to the sampling coordinate, mapping it from
-           the rotated map orientation back into the sensor frame the GDC reads */
+        /* Map the sampling point back into sensor coordinates.
+           将采样点转换回传感器坐标。 */
         switch (install_angle) {
         case 90:  pts[i].x = y;        pts[i].y = ymax - x; break;
         case 180: pts[i].x = xmax - x; pts[i].y = ymax - y; break;
@@ -49,34 +48,38 @@ int gdc_open(hbn_vnode_handle_t *gdc, hb_mem_common_buf_t *gdc_bin,
     }
 
     param_t param = {
-        .format = FMT_SEMIPLANAR_420,   /* NV12, matching the ISP output */
-        .in = { .w = in_w, .h = in_h },      /* GDC input geometry, in pixels */
-        .out = { .w = grid_w, .h = grid_h },  /* output grid = map size, in pixels */
-        .fov = 180.0,                   /* generator parameter retained for the custom map */
-        .diameter = in_h,               /* generator diameter in input pixels */
+        .format = FMT_SEMIPLANAR_420,   /* NV12, as output by ISP. 与 ISP 输出的 NV12 一致。 */
+        .in = { .w = in_w, .h = in_h },
+        .out = { .w = grid_w, .h = grid_h },
+        /* Custom generator: FOV in degrees, diameter in input pixels.
+           自定义映射生成参数：FOV 用度，直径用输入像素。 */
+        .fov = 180.0,
+        .diameter = in_h,
     };
 
     window_t win = {
-        .transform = CUSTOM,            /* use the generated map, not a built-in transform */
+        .transform = CUSTOM,
         .strength = 1.0,
         .strengthY = 1.0,
         .keep_ratio = 1,
-        .FOV_h = 90.0,                  /* generator fields used with CUSTOM mapping */
+        /* Generator angles for CUSTOM mode.
+           CUSTOM 模式的生成器角度参数。 */
+        .FOV_h = 90.0,
         .FOV_w = 90.0,
         .trapezoid_left_angle = 90.0,
         .trapezoid_right_angle = 90.0,
         .out_r = { .w = grid_w, .h = grid_h },
-        .input_roi_r = { .w = in_w, .h = in_h },   /* whole input frame, in pixels */
+        .input_roi_r = { .w = in_w, .h = in_h },
         .zoom = 1.0,
         .custom = {
             .full_tile_calc = 1,
             .tile_incr_x = 50,
             .tile_incr_y = 50,
-            .w = (int32_t)grid_w - 1,       /* grid size minus one, as the map is */
-            .h = (int32_t)grid_h - 1,       /* indexed from 0 */
-            .centerx = (double)(grid_w / 2),   /* map center, in grid coordinates */
+            .w = (int32_t)grid_w - 1,       /* Last zero-based grid index. 从 0 起算的网格末索引。 */
+            .h = (int32_t)grid_h - 1,
+            .centerx = (double)(grid_w / 2),
             .centery = (double)(grid_h / 2),
-            .points = pts,                  /* generated map, npts entries */
+            .points = pts,
         },
     };
 
@@ -105,6 +108,8 @@ int gdc_open(hbn_vnode_handle_t *gdc, hb_mem_common_buf_t *gdc_bin,
     free(cfg_buf);
     free(pts);
 
+    /* Make the cached binary visible to the GDC before attaching it.
+       挂接配置二进制前先刷缓存，使 GDC 能读到配置。 */
     if (hb_mem_flush_buf(gdc_bin->fd, 0, cfg_size) != 0)
         return -1;
 

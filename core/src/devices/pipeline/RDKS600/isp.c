@@ -1,12 +1,7 @@
 /**
  * @file isp.c
- * @brief isp node: offline (DDR) ISP, NV12 output.
- *
- * RAW10 frames arriving from VIN in DDR are processed here and handed on as NV12,
- * which is the format every later stage (PYM, GDC) and the caller's buffers use.
- *
- * The function contract (parameters, units, ownership, return value) is documented
- * with the declaration in RDKS600.h.
+ * @brief Offline ISP converts RAW10 from VIN in DDR to NV12 on channel 0.
+ * 离线 ISP 从 DDR 读取 VIN 的 RAW10，在通道 0 输出 NV12。
  *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
@@ -17,8 +12,8 @@
 
 #include <string.h>
 
-/* Number of driver-held output buffers for the ISP main frame; the platform's S600
- * camera stack uses 3 for the offline path. */
+/* The BSP uses three driver-owned buffers for offline ISP output.
+ * BSP 为离线 ISP 输出配置三个缓冲区，由驱动持有。 */
 #define DSC_ISP_BUF_NUM 3
 
 int isp_open(hbn_vnode_handle_t *isp, uint32_t width, uint32_t height,
@@ -26,18 +21,13 @@ int isp_open(hbn_vnode_handle_t *isp, uint32_t width, uint32_t height,
 {
     isp_cfg_t cfg = { 0 };
 
-    /*
-     * Node identity and scheduling. hw_id / slot_id identify which ISP instance and
-     * which of its slots this eye uses; ctx_id stays AUTO_ALLOC_ID, the same value
-     * passed as the context argument to hbn_vnode_open() below.
-     */
     cfg.isp_attr.channel.hw_id   = hw_id;
     cfg.isp_attr.channel.slot_id = slot_id;
     cfg.isp_attr.channel.ctx_id  = AUTO_ALLOC_ID;
 
     cfg.isp_attr.work_mode  = 0;
-    /* Non-HDR (linear) sensor mode: the value the platform's S600 configuration
-       sets for this sensor. */
+    /* The BSP encodes linear (non-HDR) mode as 1.
+     * BSP 用 1 表示线性（非 HDR）模式。 */
     cfg.isp_attr.hdr_mode   = 1;
     cfg.isp_attr.size.width  = width;
     cfg.isp_attr.size.height = height;
@@ -45,19 +35,18 @@ int isp_open(hbn_vnode_handle_t *isp, uint32_t width, uint32_t height,
     cfg.isp_attr.sched_mode  = SCHED_MODE_MANUAL;
     cfg.isp_attr.algo_state  = 1;
 
-    /* The ISP runs on its own, not combined with a second instance. */
     cfg.isp_attr.isp_combine.isp_channel_mode = ISP_CHANNEL_MODE_NORMAL;
 
-    /* Statistics buffers the 3A algorithms read; the platform's S600 configuration
-       enables these three and leaves the remaining two off. */
+    /* Match the BSP's 3A statistics settings for this sensor.
+     * 3A 统计配置沿用 BSP 对此传感器的设置。 */
     cfg.isp_attr.isp_sw_ctrl.ae_stat_buf_en    = 1;
     cfg.isp_attr.isp_sw_ctrl.awb_stat_buf_en   = 1;
     cfg.isp_attr.isp_sw_ctrl.ae5bin_stat_buf_en = 1;
     cfg.isp_attr.isp_sw_ctrl.ctx_buf_en        = 0;
     cfg.isp_attr.isp_sw_ctrl.pixel_consistency_en = 0;
 
-    /* Both crop stages are disabled: the ISP processes the whole frame it is given.
-       Cropping is the scaling node's job. */
+    /* Keep the full frame for downstream cropping in PYM.
+     * 保留整帧，交给下游 PYM 裁剪。 */
     cfg.ichn_attr.input_crop_cfg.enable  = 0;
     cfg.ichn_attr.in_buf_noclean         = 1;
     cfg.ichn_attr.in_buf_noncached       = 0;
@@ -65,7 +54,8 @@ int isp_open(hbn_vnode_handle_t *isp, uint32_t width, uint32_t height,
     cfg.ochn_attr.output_crop_cfg.enable = 0;
     cfg.ochn_attr.out_buf_noinvalid      = 1;
     cfg.ochn_attr.out_buf_noncached      = 0;
-    cfg.ochn_attr.output_raw_level       = 0;   /* ISP_OUTPUT_RAW_LEVEL_SENSOR_DATA */
+    cfg.ochn_attr.output_raw_level       = 0;   /* ISP_OUTPUT_RAW_LEVEL_SENSOR_DATA (sensor data).
+                                               * ISP_OUTPUT_RAW_LEVEL_SENSOR_DATA（传感器数据）。 */
     cfg.ochn_attr.buf_num                = DSC_ISP_BUF_NUM;
 
     cfg.ochn_attr.stream_output_mode = STREAM_OUTPUT_MODE_DISABLE;

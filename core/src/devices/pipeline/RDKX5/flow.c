@@ -1,6 +1,5 @@
 /**
  * @file flow.c
- * @brief flow node: vflow build/bind and camera teardown helpers.
  *
  * This file is part of RDK Stereo Camera SDK (https://github.com/D-Robotics/RDK-Stereo-Camera-SDK).
  * Copyright (c) 2026 D-Robotics.
@@ -27,7 +26,6 @@ int vflow_build(hbn_vflow_handle_t *vflow, camera_handle_t cam_fd,
         (vse != 0 && hbn_vflow_add_vnode(*vflow, vse) != 0))
         return -1;
 
-    // vin -> isp -> [gdc] -> [vse]
     if(hbn_vflow_bind_vnode(*vflow, vin, 0, isp, 0) != 0)return -1;
     if(gdc != 0 && hbn_vflow_bind_vnode(*vflow, isp, 0, gdc, 0) != 0)return -1;
     if(vse != 0){
