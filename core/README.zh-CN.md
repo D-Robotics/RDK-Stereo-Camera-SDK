@@ -334,7 +334,7 @@ cfg.camera_fifo.depth = 8;    /* 相机帧 FIFO 深度 */
 - `addr`：IMU 的 I2C 地址
 - `odr_hz`：采样率
 - `accel_fsr_g` / `gyro_fsr_dps`：加速度计与陀螺仪量程
-- `accel_bw_sel` / `gyro_bw_sel`：滤波器档位，取值见 `dsc_get_imu_info()`
+- `bw_sel`：加速度计与陀螺仪共用的 UI 滤波带宽档位，取值见 `dsc_get_imu_info()`。
 
 **eeprom_config**
 

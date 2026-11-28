@@ -33,6 +33,13 @@ struct ModelDesc {
                      std::size_t cap, std::size_t *n_out); /**< Read at most cap packets. */
     bool   (*full)(base::I2cDevice &bus); /**< Report and acknowledge FIFO overflow as required by the model. */
     void   (*deinit)(base::I2cDevice &bus); /**< Restore the sensor to its idle state. */
+    /**
+     * Read the model's common group delay from its filter registers and convert it
+     * into nanoseconds. A null pointer means the model has no documented delay, which
+     * the wrapper reports as Status::Unsupported. The call reads registers, so it must
+     * not run while the model is streaming.
+     */
+    Status (*group_delay_ns)(base::I2cDevice &bus, uint64_t *delay_ns) = nullptr;
 };
 
 /**
@@ -73,6 +80,19 @@ public:
 
     /** @return true when the hardware FIFO reports overflow/full; false also covers read failure. */
     bool full();
+
+    /**
+     * Read the sample-path group delay the bound model is currently configured for.
+     *
+     * The delay is read back from the registers, so this must be called between init()
+     * and start(): the I2C bus is not shared with the streaming reads.
+     *
+     * @param[out] delay_ns Common group delay in nanoseconds, written only on success.
+     * @retval Status::Ok Both paths have the same documented delay.
+     * @retval Status::ParamError A null output pointer or no bound model.
+     * @retval Status::Unsupported The paths differ or no common delay is documented.
+     */
+    Status group_delay_ns(uint64_t *delay_ns);
 
     /** @return Statically allocated name of the bound model. */
     const char *name() const;

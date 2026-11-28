@@ -28,7 +28,13 @@ constexpr uint8_t kIntfConfig1  = 0x4D;
 constexpr uint8_t kPwrMgmt0     = 0x4E;
 constexpr uint8_t kGyroConfig0  = 0x4F;
 constexpr uint8_t kAccelConfig0 = 0x50;
+constexpr uint8_t kGyroConfig1  = 0x51;
 constexpr uint8_t kGyroAccelCfg = 0x52;
+constexpr uint8_t kAccelConfig1 = 0x53;
+constexpr uint8_t kGyroUiOrderShift  = 2;  // GYRO_CONFIG1[3:2]
+constexpr uint8_t kAccelUiOrderShift = 3;  // ACCEL_CONFIG1[4:3]
+constexpr uint8_t kUiOrderMask       = 0x03;
+constexpr uint8_t kUiOrderSecond    = 0x01;
 constexpr uint8_t kTmstConfig   = 0x54;
 constexpr uint8_t kFifoConfig1  = 0x5F;
 constexpr uint8_t kFsyncConfig  = 0x62;
@@ -96,6 +102,91 @@ bool select_bank(base::I2cDevice &bus, uint8_t bank)
     return bus.update(kBankSel, 0x07, bank) == Status::Ok;
 }
 
+// UI-filter group delay at DC in 0.1 ms units (DS-000347 rev. 1.2, pp. 31–33).
+// Each row uses the raw order and ODR codes. Columns use the raw bandwidth code;
+// 8–13 are reserved. At 2 kHz and above, the datasheet gives one delay per ODR.
+struct DelayRow {
+    uint8_t order;
+    uint8_t odr;
+    uint16_t tenths_ms[kBwSelCount];
+};
+
+constexpr DelayRow kGroupDelay[] = {
+    //          BW:  0   1   2   3    4    5    6    7    8–13              14  15
+    // First order
+    {0,  1, {       1,  1,  1,  1,   1,   1,   1,   1,   0, 0, 0, 0, 0, 0,  1,  1}},
+    {0,  2, {       1,  1,  1,  1,   1,   1,   1,   1,   0, 0, 0, 0, 0, 0,  1,  1}},
+    {0,  3, {       2,  2,  2,  2,   2,   2,   2,   2,   0, 0, 0, 0, 0, 0,  2,  2}},
+    {0,  4, {       4,  4,  4,  4,   4,   4,   4,   4,   0, 0, 0, 0, 0, 0,  4,  4}},
+    {0,  5, {       8,  8,  8,  8,   8,   8,   8,   8,   0, 0, 0, 0, 0, 0,  8,  8}},
+    {0,  6, {       6, 18, 20, 28,  31,  41,  47,  81,   0, 0, 0, 0, 0, 0, 15,  2}},
+    {0, 15, {      11, 36, 40, 55,  61,  81,  93, 162,   0, 0, 0, 0, 0, 0, 30,  4}},
+    {0,  7, {      27, 44, 50, 68,  76, 102, 117, 203,   0, 0, 0, 0, 0, 0, 38, 10}},
+    {0,  8, {      53, 44, 50, 68,  76, 102, 117, 203,   0, 0, 0, 0, 0, 0, 38, 19}},
+    {0,  9, {     105, 44, 50, 68,  76, 102, 117, 203,   0, 0, 0, 0, 0, 0, 38, 38}},
+    {0, 10, {     210, 44, 50, 68,  76, 102, 117, 203,   0, 0, 0, 0, 0, 0, 38, 75}},
+    {0, 11, {     210, 44, 50, 68,  76, 102, 117, 203,   0, 0, 0, 0, 0, 0, 38, 75}},
+    // Second order
+    {1,  1, {       1,  1,  1,  1,   1,   1,   1,   1,   0, 0, 0, 0, 0, 0,  1,  1}},
+    {1,  2, {       1,  1,  1,  1,   1,   1,   1,   1,   0, 0, 0, 0, 0, 0,  1,  1}},
+    {1,  3, {       2,  2,  2,  2,   2,   2,   2,   2,   0, 0, 0, 0, 0, 0,  2,  2}},
+    {1,  4, {       4,  4,  4,  4,   4,   4,   4,   4,   0, 0, 0, 0, 0, 0,  4,  4}},
+    {1,  5, {       8,  8,  8,  8,   8,   8,   8,   8,   0, 0, 0, 0, 0, 0,  8,  8}},
+    {1,  6, {       7, 21, 24, 32,  37,  52,  61, 120,   0, 0, 0, 0, 0, 0, 15,  2}},
+    {1, 15, {      13, 41, 47, 64,  73, 104, 122, 240,   0, 0, 0, 0, 0, 0, 30,  4}},
+    {1,  7, {      33, 51, 58, 80,  91, 129, 153, 300,   0, 0, 0, 0, 0, 0, 38, 10}},
+    {1,  8, {      65, 51, 58, 80,  91, 129, 153, 300,   0, 0, 0, 0, 0, 0, 38, 19}},
+    {1,  9, {     129, 51, 58, 80,  91, 129, 153, 300,   0, 0, 0, 0, 0, 0, 38, 38}},
+    {1, 10, {     257, 51, 58, 80,  91, 129, 153, 300,   0, 0, 0, 0, 0, 0, 38, 75}},
+    {1, 11, {     257, 51, 58, 80,  91, 129, 153, 300,   0, 0, 0, 0, 0, 0, 38, 75}},
+    // Third order
+    {2,  1, {       1,  1,  1,  1,   1,   1,   1,   1,   0, 0, 0, 0, 0, 0,  1,  1}},
+    {2,  2, {       1,  1,  1,  1,   1,   1,   1,   1,   0, 0, 0, 0, 0, 0,  1,  1}},
+    {2,  3, {       2,  2,  2,  2,   2,   2,   2,   2,   0, 0, 0, 0, 0, 0,  2,  2}},
+    {2,  4, {       4,  4,  4,  4,   4,   4,   4,   4,   0, 0, 0, 0, 0, 0,  4,  4}},
+    {2,  5, {       8,  8,  8,  8,   8,   8,   8,   8,   0, 0, 0, 0, 0, 0,  8,  8}},
+    {2,  6, {       8, 23, 27, 40,  46,  66,  82, 141,   0, 0, 0, 0, 0, 0, 15,  2}},
+    {2, 15, {      16, 46, 54, 79,  92, 132, 163, 281,   0, 0, 0, 0, 0, 0, 30,  4}},
+    {2,  7, {      40, 58, 68, 98, 114, 165, 204, 352,   0, 0, 0, 0, 0, 0, 38, 10}},
+    {2,  8, {      80, 58, 68, 98, 114, 165, 204, 352,   0, 0, 0, 0, 0, 0, 38, 19}},
+    {2,  9, {     159, 58, 68, 98, 114, 165, 204, 352,   0, 0, 0, 0, 0, 0, 38, 38}},
+    {2, 10, {     318, 58, 68, 98, 114, 165, 204, 352,   0, 0, 0, 0, 0, 0, 38, 75}},
+    {2, 11, {     318, 58, 68, 98, 114, 165, 204, 352,   0, 0, 0, 0, 0, 0, 38, 75}},
+};
+
+Status group_delay_ns(base::I2cDevice &bus, uint64_t *delay_ns)
+{
+    if(!delay_ns)return Status::ParamError;
+    if(!select_bank(bus, 0))return Status::HwError;
+
+    uint8_t gyro_config0 = 0, accel_config0 = 0, gyro_config1 = 0, accel_config1 = 0;
+    uint8_t filt_bw = 0;
+    if(bus.read(kGyroConfig0, &gyro_config0) != Status::Ok ||
+       bus.read(kAccelConfig0, &accel_config0) != Status::Ok ||
+       bus.read(kGyroConfig1, &gyro_config1) != Status::Ok ||
+       bus.read(kAccelConfig1, &accel_config1) != Status::Ok ||
+       bus.read(kGyroAccelCfg, &filt_bw) != Status::Ok)
+        return Status::HwError;
+
+    const uint8_t gyro_order  = (gyro_config1 >> kGyroUiOrderShift) & kUiOrderMask;
+    const uint8_t accel_order = (accel_config1 >> kAccelUiOrderShift) & kUiOrderMask;
+    const uint8_t gyro_odr    = gyro_config0 & 0x0F;
+    const uint8_t accel_odr   = accel_config0 & 0x0F;
+    const uint8_t gyro_bw     = filt_bw & 0x0F;
+    const uint8_t accel_bw    = filt_bw >> 4;
+
+    uint16_t gyro_delay = 0, accel_delay = 0;
+    for(const DelayRow &row : kGroupDelay){
+        if(row.order == gyro_order && row.odr == gyro_odr)
+            gyro_delay = row.tenths_ms[gyro_bw];
+        if(row.order == accel_order && row.odr == accel_odr)
+            accel_delay = row.tenths_ms[accel_bw];
+    }
+    if(gyro_delay == 0 || gyro_delay != accel_delay)return Status::Unsupported;
+    *delay_ns = static_cast<uint64_t>(gyro_delay) * 100000ULL;
+    return Status::Ok;
+}
+
 Status init(base::I2cDevice &bus, const ImuConfig &cfg)
 {
     // Strict validation: unsupported values (including unset 0) always error out; no defaults, no rounding to nearest
@@ -103,10 +194,7 @@ Status init(base::I2cDevice &bus, const ImuConfig &cfg)
     if(!lookup(kOdr, cfg.odr_hz, &odr_bits))                     return Status::Unsupported;
     if(!lookup(kAccelFsr, cfg.accel_fsr_g, &afs_bits))           return Status::Unsupported;
     if(!lookup(kGyroFsr, cfg.gyro_fsr_dps, &gfs_bits))           return Status::Unsupported;
-    if(cfg.accel_bw_sel >= kBwSelCount)                          return Status::Unsupported;
-    if(cfg.gyro_bw_sel  >= kBwSelCount)                          return Status::Unsupported;
-    const uint8_t afilt = cfg.accel_bw_sel;
-    const uint8_t gfilt = cfg.gyro_bw_sel;
+    if(cfg.bw_sel >= kBwSelCount)                                return Status::Unsupported;
 
     if(!select_bank(bus, 0))
         return Status::HwError;
@@ -135,6 +223,14 @@ Status init(base::I2cDevice &bus, const ImuConfig &cfg)
     if(bus.write(kIntConfig1, 0x00) != Status::Ok)      // async reset off
         return Status::HwError;
 
+    // Keep both UI filters at the factory-default second order. The two order fields
+    // occupy different bits; preserve the reserved, temperature and DEC2 fields.
+    if(bus.update(kGyroConfig1, kUiOrderMask << kGyroUiOrderShift,
+                  kUiOrderSecond << kGyroUiOrderShift) != Status::Ok ||
+       bus.update(kAccelConfig1, kUiOrderMask << kAccelUiOrderShift,
+                  kUiOrderSecond << kAccelUiOrderShift) != Status::Ok)
+        return Status::HwError;
+
     // Power on
     if(bus.update(kPwrMgmt0, 0x3F, 0x0F) != Status::Ok)
         return Status::HwError;
@@ -149,7 +245,7 @@ Status init(base::I2cDevice &bus, const ImuConfig &cfg)
     if(bus.update(kAccelConfig0, 0xEF, static_cast<uint8_t>(afs_bits | odr_bits))
             != Status::Ok)
         return Status::HwError;
-    if(bus.write(kGyroAccelCfg, static_cast<uint8_t>((afilt << 4) | gfilt))
+    if(bus.write(kGyroAccelCfg, static_cast<uint8_t>((cfg.bw_sel << 4) | cfg.bw_sel))
             != Status::Ok)
         return Status::HwError;
 
@@ -265,6 +361,7 @@ extern const ModelDesc kIcm42688 = {
     read,
     full,
     deinit,
+    group_delay_ns,
 };
 
 DSC_IMU_REGISTER_MODEL(kIcm42688);

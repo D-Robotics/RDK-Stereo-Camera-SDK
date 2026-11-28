@@ -74,6 +74,7 @@ struct dsc_device_s {
     std::unique_ptr<base::TimestampTracker> tracker;
 
     // Cached from the config at init (used by the threads)
+    uint64_t imu_group_delay_ns = 0;   // common UI-filter group delay read back at init
     uint32_t output_w = 0, output_h = 0;
     dsc_stereo_layout_t stereo_layout = DSC_STEREO_LAYOUT_NONE;
     uint32_t fps = 0;
@@ -161,7 +162,7 @@ static void imu_thread_func(dsc_device_t *dev)
                 std::lock_guard<std::mutex> lock(dev->tracker_mtx);
                 timestamp_ns = dev->tracker->get_slave_timestamp(p.is_fsync, p.is_fsync ? &delta_ns : nullptr);
             }
-            if(timestamp_ns == 0)continue;
+            if(timestamp_ns <= dev->imu_group_delay_ns)continue;
 
             dsc_imu_packet_t pkt{};
             for(std::size_t axis = 0; axis < 3; ++axis){
@@ -170,7 +171,8 @@ static void imu_thread_func(dsc_device_t *dev)
             }
             pkt.temp = static_cast<float>(p.temp) / 2.07f + 25.0f;
             pkt.is_fsync = p.is_fsync;
-            pkt.timestamp_ns = timestamp_ns;
+            // Compensate the published sample, not the tracker's FSYNC timebase.
+            pkt.timestamp_ns = timestamp_ns - dev->imu_group_delay_ns;
             dev->imu_fifo->push(pkt);
         }
         if(dev->state.load() != Status::Ok)break;
@@ -435,10 +437,14 @@ dsc_err_t dsc_init(
         ic.odr_hz       = cfg->imu_config.odr_hz;
         ic.accel_fsr_g  = cfg->imu_config.accel_fsr_g;
         ic.gyro_fsr_dps = cfg->imu_config.gyro_fsr_dps;
-        ic.accel_bw_sel = cfg->imu_config.accel_bw_sel;
-        ic.gyro_bw_sel  = cfg->imu_config.gyro_bw_sel;
+        ic.bw_sel       = cfg->imu_config.bw_sel;
         Status st = dev->imu->init(ic);
         if(st != Status::Ok)return to_err(st);
+        // Cache the DC filter delay before streaming starts using the bus.
+        // Leave unsupported configurations uncompensated; do not hide I2C failures.
+        dev->imu_group_delay_ns = 0;
+        st = dev->imu->group_delay_ns(&dev->imu_group_delay_ns);
+        if(st != Status::Ok && st != Status::Unsupported)return to_err(st);
     }
 
     // Cache the parameters needed by the threads

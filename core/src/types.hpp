@@ -125,8 +125,7 @@ struct ImuConfig {
     uint16_t accel_fsr_g;
     /** Gyroscope full-scale range in degrees per second. */
     uint16_t gyro_fsr_dps;
-    uint8_t  accel_bw_sel;   // accel UI filter setting 0..F; see info() for the bandwidths
-    uint8_t  gyro_bw_sel;    // gyro UI filter setting 0..F; see info() for the bandwidths
+    uint8_t  bw_sel;   // shared accel/gyro UI filter selector; see ModelDesc::info
 };
 
 // ============================== Calibration ==============================

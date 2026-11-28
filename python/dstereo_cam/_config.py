@@ -98,8 +98,7 @@ _FIELDS = {
         "odr_hz": (None, _int),
         "accel_fsr_g": (None, _int),
         "gyro_fsr_dps": (None, _int),
-        "accel_bw_sel": (None, _int),
-        "gyro_bw_sel": (None, _int),
+        "bw_sel": (None, _int),
     },
     "eeprom_config": {
         "bus": ([], _buses),
@@ -213,8 +212,7 @@ def to_c(values):
     out.imu_config.odr_hz = imu["odr_hz"]
     out.imu_config.accel_fsr_g = imu["accel_fsr_g"]
     out.imu_config.gyro_fsr_dps = imu["gyro_fsr_dps"]
-    out.imu_config.accel_bw_sel = imu["accel_bw_sel"]
-    out.imu_config.gyro_bw_sel = imu["gyro_bw_sel"]
+    out.imu_config.bw_sel = imu["bw_sel"]
 
     eeprom = values["eeprom_config"]
     _fill_bus(out.eeprom_config, eeprom["bus"])
