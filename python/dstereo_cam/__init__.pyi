@@ -94,8 +94,7 @@ class ImuConfig(TypedDict):
     odr_hz: int
     accel_fsr_g: int
     gyro_fsr_dps: int
-    accel_bw_sel: int
-    gyro_bw_sel: int
+    bw_sel: int
 
 
 class EepromConfig(TypedDict):

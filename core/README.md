@@ -335,7 +335,7 @@ The preset values for each platform and model (buses, addresses, timing, and so 
 - `addr`: IMU I2C address
 - `odr_hz`: sample rate
 - `accel_fsr_g` / `gyro_fsr_dps`: accelerometer and gyroscope full-scale ranges
-- `accel_bw_sel` / `gyro_bw_sel`: filter settings; values are documented by `dsc_get_imu_info()`
+- `bw_sel`: shared UI-filter bandwidth selector for both sensors; values are documented by `dsc_get_imu_info()`.
 
 **eeprom_config**
 

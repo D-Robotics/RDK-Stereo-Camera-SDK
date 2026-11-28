@@ -138,8 +138,7 @@ Status init(base::I2cDevice &bus, const ImuConfig &cfg)
     if(!lookup(kOdr, cfg.odr_hz, &odr_bits))                     return Status::Unsupported;
     if(!lookup(kAccelFsr, cfg.accel_fsr_g, &afs_bits))           return Status::Unsupported;
     if(!lookup(kGyroFsr, cfg.gyro_fsr_dps, &gfs_bits))           return Status::Unsupported;
-    if(cfg.accel_bw_sel >= kBwSelCount)                          return Status::Unsupported;
-    if(cfg.gyro_bw_sel  >= kBwSelCount)                          return Status::Unsupported;
+    if(cfg.bw_sel >= kBwSelCount)                                return Status::Unsupported;
 
     // Software reset; the bit clears itself once the reset has completed
     if(bus.update(kSignalPathReset, 0x10, 0x10) != Status::Ok)
@@ -171,9 +170,9 @@ Status init(base::I2cDevice &bus, const ImuConfig &cfg)
     if(bus.update(kAccelConfig0, 0x6F, static_cast<uint8_t>(afs_bits | odr_bits))
             != Status::Ok)
         return Status::HwError;
-    if(bus.update(kGyroConfig1, 0x07, cfg.gyro_bw_sel) != Status::Ok)
+    if(bus.update(kGyroConfig1, 0x07, cfg.bw_sel) != Status::Ok)
         return Status::HwError;
-    if(bus.update(kAccelConfig1, 0x07, cfg.accel_bw_sel) != Status::Ok)
+    if(bus.update(kAccelConfig1, 0x07, cfg.bw_sel) != Status::Ok)
         return Status::HwError;
 
     // Watermark unused: the host polls the count instead
@@ -272,20 +271,19 @@ Status read(base::I2cDevice &bus, ImuHwFifo16Packet *out, std::size_t cap, std::
     return Status::Ok;
 }
 
-// The ICM-42607 datasheet documents the UI-filter bandwidth but no group delay for the
-// 1st-order low-pass path of this part, so there is no table to look the delay up in.
-Status group_delay_ns(base::I2cDevice &bus, uint64_t *gyro_ns, uint64_t *accel_ns)
-{
-    (void)bus;
-    if(!gyro_ns || !accel_ns)return Status::ParamError;
-    return Status::Unsupported;
-}
-
 bool full(base::I2cDevice &bus)
 {
     uint8_t val = 0;
     if(bus.readBurst(kIntStatus, &val, 1) != Status::Ok)return false;
     return (val & 0x02) != 0;   // INT_STATUS bit1 = FIFO_FULL (auto-cleared on read)
+}
+
+// No compensation until the filter delay is confirmed for this model.
+Status group_delay_ns(base::I2cDevice &, uint64_t *delay_ns)
+{
+    if(!delay_ns)return Status::ParamError;
+    *delay_ns = 0;
+    return Status::Ok;
 }
 
 void deinit(base::I2cDevice &bus)
@@ -319,8 +317,8 @@ extern const ModelDesc kIcm42607C = {
     stop,
     read,
     full,
-    group_delay_ns,
     deinit,
+    group_delay_ns,
 };
 
 DSC_IMU_REGISTER_MODEL(kIcm42607C);

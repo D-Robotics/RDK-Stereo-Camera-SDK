@@ -42,8 +42,7 @@ def DSC_CONFIG_RDKX5_GS130WI(mode, width, height, fps, odr):
         odr_hz=odr,
         accel_fsr_g=16,
         gyro_fsr_dps=2000,
-        accel_bw_sel=0,
-        gyro_bw_sel=0,
+        bw_sel=0,
     )
     values["eeprom_config"].update(bus=[4, 6], addr=0x50)
     values["camera_fifo"].update(depth=4, mode=FifoMode.DROP_OLD)
@@ -86,8 +85,7 @@ def DSC_CONFIG_RDKX5_GS130W(mode, width, height, fps, odr):
         odr_hz=odr,
         accel_fsr_g=16,
         gyro_fsr_dps=2000,
-        accel_bw_sel=0,
-        gyro_bw_sel=0,
+        bw_sel=0,
     )
     values["eeprom_config"].update(bus=[4, 6], addr=0x50)
     values["camera_fifo"].update(depth=4, mode=FifoMode.DROP_OLD)
@@ -122,8 +120,7 @@ def DSC_CONFIG_RDKS100_GS130WI(mode, width, height, fps, odr):
         odr_hz=odr,
         accel_fsr_g=16,
         gyro_fsr_dps=2000,
-        accel_bw_sel=0,
-        gyro_bw_sel=0,
+        bw_sel=0,
     )
     values["eeprom_config"].update(bus=[2], addr=0x50)
     values["camera_fifo"].update(depth=4, mode=FifoMode.DROP_OLD)
@@ -180,8 +177,7 @@ def DSC_CONFIG_RDKS600_GS130WI(mode, width, height, fps, odr):
         odr_hz=odr,
         accel_fsr_g=16,
         gyro_fsr_dps=2000,
-        accel_bw_sel=0,
-        gyro_bw_sel=0,
+        bw_sel=0,
     )
     values["eeprom_config"].update(bus=[5], addr=0x50)
     values["camera_fifo"].update(depth=4, mode=FifoMode.DROP_OLD)
@@ -228,8 +224,6 @@ def DSC_CONFIG_RDKX5_A1(mode, width, height, fps, odr):
     return _without_imu(DSC_CONFIG_RDKX5_A1P(mode, width, height, fps, odr))
 
 
-
-
 PRESETS = {
     ("RDKX5", "GS130W"): DSC_CONFIG_RDKX5_GS130W,
     ("RDKX5", "GS130WI"): DSC_CONFIG_RDKX5_GS130WI,
@@ -237,12 +231,8 @@ PRESETS = {
     ("RDKX5", "A1P"): DSC_CONFIG_RDKX5_A1P,
     ("RDKS100", "GS130W"): DSC_CONFIG_RDKS100_GS130W,
     ("RDKS100", "GS130WI"): DSC_CONFIG_RDKS100_GS130WI,
-    ("RDKS100", "A1"): DSC_CONFIG_RDKS100_A1,
-    ("RDKS100", "A1P"): DSC_CONFIG_RDKS100_A1P,
     ("RDKS600", "GS130W"): DSC_CONFIG_RDKS600_GS130W,
     ("RDKS600", "GS130WI"): DSC_CONFIG_RDKS600_GS130WI,
-    ("RDKS600", "A1"): DSC_CONFIG_RDKS600_A1,
-    ("RDKS600", "A1P"): DSC_CONFIG_RDKS600_A1P,
 }
 
 

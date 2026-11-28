@@ -123,8 +123,7 @@ class dsc_imu_config_t(C.Structure):
         ("odr_hz", C.c_uint32),
         ("accel_fsr_g", C.c_uint16),
         ("gyro_fsr_dps", C.c_uint16),
-        ("accel_bw_sel", C.c_uint8),  # UI filter level 0..7
-        ("gyro_bw_sel", C.c_uint8),  # 0xFF = not set
+        ("bw_sel", C.c_uint8),  # shared UI-filter selector; values depend on the model
     ]
 
 

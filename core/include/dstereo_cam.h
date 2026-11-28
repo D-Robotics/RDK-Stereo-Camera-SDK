@@ -97,8 +97,7 @@ typedef struct dsc_imu_config_s{
     uint32_t odr_hz; /**< Output data rate in Hz. */
     uint16_t accel_fsr_g; /**< Accelerometer full-scale range in g. */
     uint16_t gyro_fsr_dps; /**< Gyroscope full-scale range in degrees per second. */
-    uint8_t accel_bw_sel; /**< Accelerometer UI-filter selector, 0x0..0xF; see dsc_get_imu_info(). */
-    uint8_t gyro_bw_sel; /**< Gyroscope UI-filter selector, 0x0..0xF; see dsc_get_imu_info(). */
+    uint8_t bw_sel; /**< Shared accel/gyro UI-filter bandwidth selector; see dsc_get_imu_info(). */
 }dsc_imu_config_t;
 
 /** EEPROM discovery configuration for calibration data. */
@@ -293,7 +292,7 @@ typedef struct dsc_imu_packet_s{
     float gyro[3]; /**< Angular velocity in rad/s. */
     float temp; /**< Temperature in degrees Celsius. */
     bool  is_fsync; /**< True when the sample carries an IMU FSYNC anchor. */
-    uint64_t timestamp_ns; /**< Absolute timestamp in ns, aligned to the camera clock. */
+    uint64_t timestamp_ns; /**< Timestamp in ns on the camera clock, with known IMU filter delay removed. */
 }dsc_imu_packet_t;
 
 /**
@@ -344,26 +343,6 @@ const char *dsc_get_imu_name(
  */
 const char *dsc_get_imu_info(
     dsc_device_t *dev);
-
-/**
- * @brief Get the sample-path group delay of the configured IMU filters.
- *
- * The delay is read back from the detected IMU when the device is initialized, so it
- * reflects the filters that are actually programmed. It is the UI-filter group delay at
- * DC as documented in the sensor datasheet, in nanoseconds.
- *
- * @param[in]  dev      Device handle from dsc_create().
- * @param[out] gyro_ns  Gyroscope group delay in nanoseconds.
- * @param[out] accel_ns Accelerometer group delay in nanoseconds.
- * @retval DSC_OK Delay values written.
- * @retval DSC_PARAM_ERROR An argument is NULL.
- * @retval DSC_UNSUPPORTED No IMU is present, or its datasheet documents no delay for
- *                         the programmed settings.
- */
-dsc_err_t dsc_get_imu_group_delay_ns(
-    dsc_device_t *dev,
-    uint64_t *gyro_ns,
-    uint64_t *accel_ns);
 
 /* ==================== EEPROM Data ==================== */
 

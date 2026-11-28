@@ -157,7 +157,7 @@ The configuration is a plain nested dict with five sections, mirroring `dsc_conf
 | Section | Fields |
 | --- | --- |
 | `camera_config` | `bus`, `left_addr`, `right_addr`, `sensor_width`, `sensor_height`, `fps`, `line_length`, `frame_length`, `tuning_file`, `output_width`, `output_height`, `mode`, `stereo_layout`, `bus_mipi_rx`, `bus_reset_gpio`, `fsync_camera` |
-| `imu_config` | `bus`, `addr`, `odr_hz`, `accel_fsr_g`, `gyro_fsr_dps`, `accel_bw_sel`, `gyro_bw_sel` |
+| `imu_config` | `bus`, `addr`, `odr_hz`, `accel_fsr_g`, `gyro_fsr_dps`, `bw_sel` |
 | `eeprom_config` | `bus`, `addr` |
 | `camera_fifo` | `depth`, `mode` |
 | `imu_fifo` | `depth`, `mode` |

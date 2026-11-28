@@ -58,7 +58,7 @@
     .imu_config = {                                                         \
         .bus = {4, 6}, .bus_num = 2, .addr = 0x68,                          \
         .odr_hz = (odr_), .accel_fsr_g = 16, .gyro_fsr_dps = 2000,          \
-        .accel_bw_sel = 0, .gyro_bw_sel = 0,                                \
+        .bw_sel = 0,                                                        \
     },                                                                      \
     .eeprom_config = { .bus = {4, 6}, .bus_num = 2, .addr = 0x50 },         \
     .camera_fifo = { .depth = 4,    .mode = DSC_FIFO_DROP_OLD },          \
@@ -82,7 +82,7 @@
     .imu_config = {                                                         \
         .bus_num = 0, .addr = 0x68,                                         \
         .odr_hz = (odr_), .accel_fsr_g = 16, .gyro_fsr_dps = 2000,          \
-        .accel_bw_sel = 0, .gyro_bw_sel = 0,                                \
+        .bw_sel = 0,                                                        \
     },                                                                      \
     .eeprom_config = { .bus = {4, 6}, .bus_num = 2, .addr = 0x50 },         \
     .camera_fifo = { .depth = 4,    .mode = DSC_FIFO_DROP_OLD },          \
@@ -106,7 +106,7 @@
     .imu_config = {                                                         \
         .bus_num = 0, .addr = 0x68,                                         \
         .odr_hz = (odr_), .accel_fsr_g = 16, .gyro_fsr_dps = 2000,          \
-        .accel_bw_sel = 0, .gyro_bw_sel = 0,                                \
+        .bw_sel = 0,                                                        \
     },                                                                      \
     .eeprom_config = { .bus = {4, 6}, .bus_num = 2, .addr = 0x50 },         \
     .camera_fifo = { .depth = 4,    .mode = DSC_FIFO_DROP_OLD },          \
@@ -131,7 +131,7 @@
     .imu_config = {                                                         \
         .bus = {4, 6}, .bus_num = 2, .addr = 0x68,                          \
         .odr_hz = (odr_), .accel_fsr_g = 16, .gyro_fsr_dps = 2000,          \
-        .accel_bw_sel = 0, .gyro_bw_sel = 0,                                \
+        .bw_sel = 0,                                                        \
     },                                                                      \
     .eeprom_config = { .bus = {4, 6}, .bus_num = 2, .addr = 0x50 },         \
     .camera_fifo = { .depth = 4,    .mode = DSC_FIFO_DROP_OLD },          \
@@ -155,7 +155,7 @@
     .imu_config = {                                                         \
         .bus = {2}, .bus_num = 1, .addr = 0x68,                             \
         .odr_hz = (odr_), .accel_fsr_g = 16, .gyro_fsr_dps = 2000,          \
-        .accel_bw_sel = 0, .gyro_bw_sel = 0,                                \
+        .bw_sel = 0,                                                        \
     },                                                                      \
     .eeprom_config = { .bus = {2}, .bus_num = 1, .addr = 0x50 },            \
     .camera_fifo = { .depth = 4,    .mode = DSC_FIFO_DROP_OLD },          \
@@ -179,7 +179,7 @@
     .imu_config = {                                                         \
         .bus_num = 0, .addr = 0x68,                                         \
         .odr_hz = (odr_), .accel_fsr_g = 16, .gyro_fsr_dps = 2000,          \
-        .accel_bw_sel = 0, .gyro_bw_sel = 0,                                \
+        .bw_sel = 0,                                                        \
     },                                                                      \
     .eeprom_config = { .bus = {1, 2}, .bus_num = 2, .addr = 0x50 },         \
     .camera_fifo = { .depth = 4,    .mode = DSC_FIFO_DROP_OLD },          \
@@ -202,7 +202,7 @@
     .imu_config = {                                                         \
         .bus = {5}, .bus_num = 1, .addr = 0x68,                             \
         .odr_hz = (odr_), .accel_fsr_g = 16, .gyro_fsr_dps = 2000,          \
-        .accel_bw_sel = 0, .gyro_bw_sel = 0,                                \
+        .bw_sel = 0,                                                        \
     },                                                                      \
     .eeprom_config = { .bus = {5}, .bus_num = 1, .addr = 0x50 },            \
     .camera_fifo = { .depth = 4,    .mode = DSC_FIFO_DROP_OLD },          \
@@ -226,7 +226,7 @@
     .imu_config = {                                                         \
         .bus_num = 0, .addr = 0x68,                                         \
         .odr_hz = (odr_), .accel_fsr_g = 16, .gyro_fsr_dps = 2000,          \
-        .accel_bw_sel = 0, .gyro_bw_sel = 0,                                \
+        .bw_sel = 0,                                                        \
     },                                                                      \
     .eeprom_config = { .bus = {4, 5}, .bus_num = 2, .addr = 0x50 },         \
     .camera_fifo = { .depth = 4,    .mode = DSC_FIFO_DROP_OLD },          \
@@ -250,7 +250,7 @@
     .imu_config = {                                                         \
         .bus = {2}, .bus_num = 1, .addr = 0x68,                             \
         .odr_hz = (odr_), .accel_fsr_g = 16, .gyro_fsr_dps = 2000,          \
-        .accel_bw_sel = 0, .gyro_bw_sel = 0,                                \
+        .bw_sel = 0,                                                        \
     },                                                                      \
     .eeprom_config = { .bus = {2}, .bus_num = 1, .addr = 0x50 },            \
     .camera_fifo = { .depth = 4,    .mode = DSC_FIFO_DROP_OLD },          \
@@ -275,7 +275,7 @@
     .imu_config = {                                                         \
         .bus_num = 0, .addr = 0x68,                                         \
         .odr_hz = (odr_), .accel_fsr_g = 16, .gyro_fsr_dps = 2000,          \
-        .accel_bw_sel = 0, .gyro_bw_sel = 0,                                \
+        .bw_sel = 0,                                                        \
     },                                                                      \
     .eeprom_config = { .bus = {2}, .bus_num = 1, .addr = 0x50 },            \
     .camera_fifo = { .depth = 4,    .mode = DSC_FIFO_DROP_OLD },          \
@@ -299,7 +299,7 @@
     .imu_config = {                                                         \
         .bus = {5}, .bus_num = 1, .addr = 0x68,                             \
         .odr_hz = (odr_), .accel_fsr_g = 16, .gyro_fsr_dps = 2000,          \
-        .accel_bw_sel = 0, .gyro_bw_sel = 0,                                \
+        .bw_sel = 0,                                                        \
     },                                                                      \
     .eeprom_config = { .bus = {5}, .bus_num = 1, .addr = 0x50 },            \
     .camera_fifo = { .depth = 4,    .mode = DSC_FIFO_DROP_OLD },          \
@@ -324,7 +324,7 @@
     .imu_config = {                                                         \
         .bus_num = 0, .addr = 0x68,                                         \
         .odr_hz = (odr_), .accel_fsr_g = 16, .gyro_fsr_dps = 2000,          \
-        .accel_bw_sel = 0, .gyro_bw_sel = 0,                                \
+        .bw_sel = 0,                                                        \
     },                                                                      \
     .eeprom_config = { .bus = {5}, .bus_num = 1, .addr = 0x50 },            \
     .camera_fifo = { .depth = 4,    .mode = DSC_FIFO_DROP_OLD },          \

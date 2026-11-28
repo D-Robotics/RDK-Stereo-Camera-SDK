@@ -32,14 +32,14 @@ struct ModelDesc {
     Status (*read)  (base::I2cDevice &bus, ImuHwFifo16Packet *out,
                      std::size_t cap, std::size_t *n_out); /**< Read at most cap packets. */
     bool   (*full)(base::I2cDevice &bus); /**< Report and acknowledge FIFO overflow as required by the model. */
-    /**
-     * Read the model's configured sample-path delay from its registers and convert it
-     * into nanoseconds. The model returns Status::Unsupported when its datasheet does
-     * not document the delay for the programmed settings. The call reads registers, so
-     * it must not run while the model is streaming.
-     */
-    Status (*group_delay_ns)(base::I2cDevice &bus, uint64_t *gyro_ns, uint64_t *accel_ns);
     void   (*deinit)(base::I2cDevice &bus); /**< Restore the sensor to its idle state. */
+    /**
+     * Read the model's common group delay from its filter registers and convert it
+     * into nanoseconds. A null pointer means the model has no documented delay, which
+     * the wrapper reports as Status::Unsupported. The call reads registers, so it must
+     * not run while the model is streaming.
+     */
+    Status (*group_delay_ns)(base::I2cDevice &bus, uint64_t *delay_ns) = nullptr;
 };
 
 /**
@@ -87,13 +87,12 @@ public:
      * The delay is read back from the registers, so this must be called between init()
      * and start(): the I2C bus is not shared with the streaming reads.
      *
-     * @param[out] gyro_ns  Gyroscope group delay in nanoseconds.
-     * @param[out] accel_ns Accelerometer group delay in nanoseconds.
-     * @retval Status::Ok Delay values written.
+     * @param[out] delay_ns Common group delay in nanoseconds, written only on success.
+     * @retval Status::Ok Both paths have the same documented delay.
      * @retval Status::ParamError A null output pointer or no bound model.
-     * @retval Status::Unsupported The model datasheet documents no delay for these settings.
+     * @retval Status::Unsupported The paths differ or no common delay is documented.
      */
-    Status group_delay_ns(uint64_t *gyro_ns, uint64_t *accel_ns);
+    Status group_delay_ns(uint64_t *delay_ns);
 
     /** @return Statically allocated name of the bound model. */
     const char *name() const;
